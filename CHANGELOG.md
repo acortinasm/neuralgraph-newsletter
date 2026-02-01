@@ -2,6 +2,35 @@
 
 All notable changes to the NeuralGraph Newsletter project are documented here.
 
+## [1.4.0] - 2025-02-01
+
+### Added
+
+#### API Key Persistence
+- API keys now stored securely (hashed) in database as `ApiKey` nodes
+- New endpoints:
+  - `POST /auth/api-key` - Create and store a new API key
+  - `GET /auth/api-keys` - List all API keys (prefix and name only)
+  - `DELETE /auth/api-key/{prefix}` - Revoke an API key
+- Legacy support for `ADMIN_API_KEY` env var maintained
+
+#### Production Hardening
+- `DEBUG` config flag - controls query logging (default: false)
+- `CORS_ORIGINS` config - comma-separated allowed origins
+- CORS middleware only added when origins configured or DEBUG=true
+- Conditional query logging in database client
+
+#### Tests
+- Tests for welcome email after subscription confirmation
+- Tests for newsletter email sending to subscribers
+- Updated test mocks for all email functions
+
+### Changed
+- `POST /auth/api-key` now requires a `name` parameter and persists the key
+- CORS no longer defaults to `*` - must be explicitly configured
+
+---
+
 ## [1.3.0] - 2025-02-01
 
 ### Added

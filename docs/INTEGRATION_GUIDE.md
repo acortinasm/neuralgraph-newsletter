@@ -42,12 +42,29 @@ curl https://api.example.com/newsletters/ \
 ### API Keys (For Services/Automation)
 
 ```bash
+# Create an API key (requires admin auth)
+curl -X POST https://api.example.com/auth/api-key \
+  -H "Authorization: Bearer $JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "CI/CD Pipeline"}'
+
+# Response:
+# {"api_key": "nk_abc123...", "prefix": "nk_abc123...", "name": "CI/CD Pipeline", ...}
+
 # Use API key directly
 curl https://api.example.com/newsletters/ \
   -H "Authorization: Bearer nk_your-api-key"
+
+# List all API keys
+curl https://api.example.com/auth/api-keys \
+  -H "Authorization: Bearer $JWT_TOKEN"
+
+# Revoke an API key by prefix
+curl -X DELETE https://api.example.com/auth/api-key/nk_abc1234 \
+  -H "Authorization: Bearer $JWT_TOKEN"
 ```
 
-**API key format:** `nk_` prefix followed by random string
+**API key format:** `nk_` prefix followed by random string. Keys are stored hashed in the database.
 
 ### Public Endpoints (No Auth Required)
 

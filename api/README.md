@@ -97,6 +97,17 @@ Email functionality using Resend API:
 
 ## Routers
 
+### Authentication (`/auth`)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/login` | POST | Get JWT token with username/password |
+| `/me` | GET | Get current authenticated user |
+| `/verify` | POST | Verify token validity |
+| `/api-key` | POST | Create and store new API key |
+| `/api-keys` | GET | List all API keys (prefix/name only) |
+| `/api-key/{prefix}` | DELETE | Revoke an API key |
+
 ### Subscribers (`/subscribers`)
 
 | Endpoint | Method | Description |

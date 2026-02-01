@@ -112,6 +112,8 @@ Environment variables (set in `.env` or docker-compose):
 | `BASE_URL` | Public URL for tracking links | `https://neuralgraph.dev` |
 | `SECRET_KEY` | Secret for token generation | `change-me-in-production` |
 | `TOKEN_EXPIRE_DAYS` | Confirmation token expiry | `7` |
+| `DEBUG` | Enable debug mode (query logging, permissive CORS) | `false` |
+| `CORS_ORIGINS` | Comma-separated allowed origins | - |
 
 ## API Reference
 
