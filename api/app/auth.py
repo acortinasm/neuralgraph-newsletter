@@ -85,10 +85,12 @@ async def verify_api_key_from_db(api_key: str) -> Optional[dict]:
 async def store_api_key(api_key: str, name: str) -> None:
     """Store a hashed API key in the database."""
     from app.database import db
+    from datetime import datetime
 
     key_hash = hash_api_key(api_key)
     # Store only first 8 chars as prefix for identification
     key_prefix = api_key[:11]  # "nk_" + 8 chars
+    now = datetime.utcnow().isoformat() + "Z"
 
     await db.execute(
         """
@@ -96,26 +98,29 @@ async def store_api_key(api_key: str, name: str) -> None:
             key_hash: $key_hash,
             key_prefix: $key_prefix,
             name: $name,
-            created_at: datetime(),
+            created_at: $now,
             revoked_at: null
         })
         """,
-        {"key_hash": key_hash, "key_prefix": key_prefix, "name": name}
+        {"key_hash": key_hash, "key_prefix": key_prefix, "name": name, "now": now}
     )
 
 
 async def revoke_api_key(key_prefix: str) -> bool:
     """Revoke an API key by its prefix."""
     from app.database import db
+    from datetime import datetime
+
+    now = datetime.utcnow().isoformat() + "Z"
 
     result = await db.execute(
         """
         MATCH (k:ApiKey {key_prefix: $key_prefix})
         WHERE k.revoked_at IS NULL
-        SET k.revoked_at = datetime()
+        SET k.revoked_at = $now
         RETURN k.name
         """,
-        {"key_prefix": key_prefix}
+        {"key_prefix": key_prefix, "now": now}
     )
 
     return len(result) > 0
