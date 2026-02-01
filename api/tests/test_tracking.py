@@ -1,6 +1,4 @@
 """Tests for tracking endpoints."""
-import pytest
-from unittest.mock import patch
 
 
 class TestTrackOpen:

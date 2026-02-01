@@ -1,5 +1,4 @@
 """Tests for newsletter endpoints."""
-import pytest
 
 
 class TestCreateNewsletter:

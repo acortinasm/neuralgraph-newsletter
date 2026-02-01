@@ -1,7 +1,6 @@
 """Tests for rate limiting."""
-import pytest
 import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from app.rate_limit import RateLimiter, get_client_ip
 

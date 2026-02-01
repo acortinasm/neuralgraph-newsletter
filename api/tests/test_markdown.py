@@ -1,5 +1,4 @@
 """Tests for markdown utilities."""
-import pytest
 from app.markdown_utils import render_markdown, extract_excerpt
 
 

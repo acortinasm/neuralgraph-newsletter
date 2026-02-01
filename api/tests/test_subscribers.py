@@ -1,6 +1,4 @@
 """Tests for subscriber endpoints."""
-import pytest
-from unittest.mock import AsyncMock, patch
 
 
 class TestSubscribe:
