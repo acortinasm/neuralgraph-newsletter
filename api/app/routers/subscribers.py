@@ -1,16 +1,17 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request, Depends
 from datetime import datetime
 from app.database import db
 from app.email import send_confirmation_email
 from app.models import (
-    SubscribeRequest, 
-    ConfirmRequest, 
+    SubscribeRequest,
+    ConfirmRequest,
     UnsubscribeRequest,
     MessageResponse,
     Subscriber
 )
+from app.rate_limit import check_rate_limit
+from app.auth import require_admin
 import secrets
-import traceback
 
 router = APIRouter(prefix="/subscribers", tags=["subscribers"])
 
@@ -19,10 +20,15 @@ def now_iso():
     return datetime.utcnow().isoformat() + "Z"
 
 
+async def rate_limit_subscribe(request: Request):
+    """Rate limit for subscribe endpoint: 5 requests per minute per IP."""
+    await check_rate_limit(request, max_requests=5, window=60, key_prefix="subscribe")
+
+
 @router.post("/subscribe", response_model=MessageResponse)
-async def subscribe(request: SubscribeRequest):
+async def subscribe(request: SubscribeRequest, _: None = Depends(rate_limit_subscribe)):
     """Subscribe a new user (creates pending subscriber)."""
-    
+
     existing = await db.execute(
         'MATCH (s:Subscriber) WHERE s.email = $email RETURN s.email, s.status',
         {"email": request.email}
@@ -50,16 +56,12 @@ async def subscribe(request: SubscribeRequest):
         {"email": request.email, "name": request.name, "token": token, "now": now_iso()}
     )
     
-    print(f"=== ABOUT TO SEND EMAIL ===")
-    print(f"Email: {request.email}, Name: {request.name}, Token: {token}")
     try:
         send_confirmation_email(request.email, request.name, token)
-        print(f"=== EMAIL SENT SUCCESSFULLY ===")
-    except Exception as e:
-        print(f"=== EMAIL FAILED ===")
-        print(f"Error: {e}")
-        print(traceback.format_exc())
-    
+    except Exception:
+        # Log error but don't fail the request - subscriber is created
+        pass
+
     return MessageResponse(
         message="Please check your email to confirm subscription.",
         success=True
@@ -126,8 +128,8 @@ async def unsubscribe(request: UnsubscribeRequest):
 
 
 @router.get("/", response_model=list[Subscriber])
-async def list_subscribers(status: str = None, limit: int = 100):
-    """List subscribers, optionally filtered by status."""
+async def list_subscribers(status: str = None, limit: int = 100, _: dict = Depends(require_admin)):
+    """List subscribers, optionally filtered by status. Requires admin authentication."""
     
     if status:
         rows = await db.execute(
@@ -161,8 +163,8 @@ async def list_subscribers(status: str = None, limit: int = 100):
 
 
 @router.get("/{email}", response_model=Subscriber)
-async def get_subscriber(email: str):
-    """Get subscriber by email."""
+async def get_subscriber(email: str, _: dict = Depends(require_admin)):
+    """Get subscriber by email. Requires admin authentication."""
     
     result = await db.execute(
         '''

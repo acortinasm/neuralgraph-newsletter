@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to {{ newsletter_name }}</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f4f4f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f4f4f5;">
+        <tr>
+            <td align="center" style="padding: 40px 20px;">
+                <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+                    <!-- Header -->
+                    <tr>
+                        <td style="padding: 40px 40px 20px; text-align: center; border-bottom: 1px solid #e4e4e7;">
+                            <h1 style="margin: 0; font-size: 24px; color: #10b981;">{{ newsletter_name }}</h1>
+                        </td>
+                    </tr>
+
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding: 40px;">
+                            <h2 style="margin: 0 0 20px; font-size: 20px; color: #18181b;">You're all set, {{ name }}!</h2>
+
+                            <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #3f3f46;">
+                                Your subscription has been confirmed. You'll now receive our newsletter with the latest updates on graph databases, Rust, and more.
+                            </p>
+
+                            <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #3f3f46;">
+                                Here's what you can expect:
+                            </p>
+
+                            <ul style="margin: 0 0 20px; padding-left: 20px; font-size: 16px; line-height: 1.8; color: #3f3f46;">
+                                <li>Curated articles and tutorials</li>
+                                <li>Project updates and announcements</li>
+                                <li>Tips and best practices</li>
+                            </ul>
+
+                            <!-- CTA Button -->
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                                <tr>
+                                    <td align="center" style="padding: 20px 0;">
+                                        <a href="{{ website_url }}"
+                                           style="display: inline-block;
+                                                  background: linear-gradient(135deg, #10b981 0%, #06b6d4 100%);
+                                                  color: #000000;
+                                                  padding: 14px 32px;
+                                                  text-decoration: none;
+                                                  border-radius: 8px;
+                                                  font-weight: 600;
+                                                  font-size: 16px;">
+                                            Visit Our Website
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding: 20px 40px 40px; border-top: 1px solid #e4e4e7;">
+                            <p style="margin: 0; font-size: 12px; color: #a1a1aa; text-align: center;">
+                                You can unsubscribe at any time by clicking the link in any newsletter.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+
+                <!-- Footer -->
+                <p style="margin: 20px 0 0; font-size: 12px; color: #a1a1aa; text-align: center;">
+                    &copy; {{ year }} {{ newsletter_name }}
+                </p>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

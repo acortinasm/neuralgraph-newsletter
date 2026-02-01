@@ -1,13 +1,14 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from app.database import db
+from app.auth import require_admin
 
-router = APIRouter(prefix="/analytics", tags=["analytics"])
+router = APIRouter(prefix="/analytics", tags=["analytics"], dependencies=[Depends(require_admin)])
 
 
 @router.get("/subscribers/summary")
 async def subscriber_summary():
     """Get subscriber counts by status."""
-    
+
     return await db.execute(
         """
         MATCH (s:Subscriber)
@@ -20,7 +21,7 @@ async def subscriber_summary():
 @router.get("/subscribers/growth")
 async def subscriber_growth(months: int = 12):
     """Get subscriber growth over time."""
-    
+
     return await db.execute(
         """
         MATCH (s:Subscriber)
@@ -37,19 +38,19 @@ async def subscriber_growth(months: int = 12):
 @router.get("/newsletters/performance")
 async def newsletter_performance(days: int = 90):
     """Get recent newsletter performance metrics."""
-    
+
     return await db.execute(
         f"""
         MATCH (n:Newsletter)
         WHERE n.sent_at > datetime() - duration("P{days}D")
         OPTIONAL MATCH (s:Subscriber)-[r:RECEIVED]->(n)
-        WITH n, 
+        WITH n,
              COUNT(r) AS sent,
              COUNT(CASE WHEN r.opened_at IS NOT NULL THEN 1 END) AS opened,
              COUNT(CASE WHEN r.delivery_status = "bounced" THEN 1 END) AS bounced
         OPTIONAL MATCH (:Subscriber)-[c:CLICKED]->(l:Link)<-[:LINKS_TO]-(n)
         WITH n, sent, opened, bounced, COUNT(c) AS clicks
-        RETURN 
+        RETURN
             n.slug AS slug,
             n.subject AS subject,
             n.sent_at AS sent_at,
@@ -67,7 +68,7 @@ async def newsletter_performance(days: int = 90):
 @router.get("/engagement/top-subscribers")
 async def top_subscribers(limit: int = 20):
     """Get most engaged subscribers."""
-    
+
     return await db.execute(
         """
         MATCH (s:Subscriber)-[r:RECEIVED]->(n:Newsletter)
@@ -86,7 +87,7 @@ async def top_subscribers(limit: int = 20):
 @router.get("/engagement/top-links")
 async def top_links(limit: int = 20):
     """Get most clicked links."""
-    
+
     return await db.execute(
         """
         MATCH (l:Link)<-[c:CLICKED]-(s:Subscriber)
@@ -105,7 +106,7 @@ async def top_links(limit: int = 20):
 @router.get("/topics/engagement")
 async def topic_engagement():
     """Get engagement by topic."""
-    
+
     return await db.execute(
         """
         MATCH (t:Topic)<-[:ABOUT]-(l:Link)<-[c:CLICKED]-(s:Subscriber)
@@ -120,7 +121,7 @@ async def topic_engagement():
 @router.get("/health/bounces")
 async def bounce_rate(days: int = 30):
     """Get bounce rate for recent newsletters."""
-    
+
     return await db.execute(
         f"""
         MATCH (n:Newsletter)
@@ -137,7 +138,7 @@ async def bounce_rate(days: int = 30):
 @router.get("/events/recent")
 async def recent_events(days: int = 7, limit: int = 50):
     """Get recent events."""
-    
+
     return await db.execute(
         f"""
         MATCH (s:Subscriber)-[:LOGGED]->(e:Event)
