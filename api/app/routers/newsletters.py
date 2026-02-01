@@ -4,6 +4,7 @@ from app.database import db
 from app.models import NewsletterCreate, NewsletterUpdate, LinkCreate, MessageResponse
 from app.auth import require_admin
 from app.markdown_utils import render_markdown, extract_excerpt
+from app.email import send_newsletter_email
 
 router = APIRouter(prefix="/newsletters", tags=["newsletters"])
 
@@ -168,26 +169,51 @@ async def send_newsletter(slug: str, _: dict = Depends(require_admin)):
     if newsletter[0].get("n.sent_at"):
         raise HTTPException(400, "Newsletter already sent")
 
+    subject = newsletter[0].get("n.subject")
+    content_html = newsletter[0].get("n.content_html") or ""
+
+    # Get all active subscribers
+    subscribers = await db.execute(
+        """
+        MATCH (s:Subscriber)
+        WHERE s.status = "active"
+        RETURN s.email
+        """
+    )
+
+    if not subscribers:
+        raise HTTPException(400, "No active subscribers to send to")
+
+    # Send emails and track results
+    sent_count = 0
+    failed_count = 0
+
+    for sub in subscribers:
+        email = sub.get("s.email")
+        try:
+            send_newsletter_email(email, subject, content_html, slug)
+            sent_count += 1
+        except Exception:
+            failed_count += 1
+
     # Create delivery records and mark sent
-    result = await db.execute(
+    await db.execute(
         """
         MATCH (n:Newsletter {slug: $slug})
         MATCH (s:Subscriber)
         WHERE s.status = "active"
         MERGE (s)-[r:RECEIVED]->(n)
         ON CREATE SET r.sent_at = datetime(), r.delivery_status = "sent"
-        WITH n, COUNT(r) AS recipient_count
+        WITH n
         SET n.sent_at = datetime()
-        RETURN recipient_count
         """,
         {"slug": slug}
     )
 
-    count = result[0].get("recipient_count", 0) if result else 0
+    if failed_count > 0:
+        return MessageResponse(message=f"Newsletter sent to {sent_count} subscribers ({failed_count} failed)")
 
-    # TODO: Actually send emails via Resend with content_html
-
-    return MessageResponse(message=f"Newsletter sent to {count} subscribers")
+    return MessageResponse(message=f"Newsletter sent to {sent_count} subscribers")
 
 
 @router.get("/")

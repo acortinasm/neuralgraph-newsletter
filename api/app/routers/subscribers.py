@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request, Depends
 from datetime import datetime
 from app.database import db
-from app.email import send_confirmation_email
+from app.email import send_confirmation_email, send_welcome_email
 from app.models import (
     SubscribeRequest,
     ConfirmRequest,
@@ -71,22 +71,23 @@ async def subscribe(request: SubscribeRequest, _: None = Depends(rate_limit_subs
 @router.post("/confirm", response_model=MessageResponse)
 async def confirm(request: ConfirmRequest):
     """Confirm subscription with token."""
-    
+
     # Step 1: Find the subscriber with this token
     result = await db.execute(
         '''
         MATCH (s:Subscriber)
         WHERE s.confirmation_token = $token AND s.status = "pending"
-        RETURN s.email
+        RETURN s.email, s.name
         ''',
         {"token": request.token}
     )
-    
+
     if not result:
         raise HTTPException(400, "Invalid or expired token")
-    
+
     email = result[0].get("s.email")
-    
+    name = result[0].get("s.name") or "there"
+
     # Step 2: Update the subscriber
     await db.execute(
         '''
@@ -97,7 +98,13 @@ async def confirm(request: ConfirmRequest):
         ''',
         {"email": email, "now": now_iso()}
     )
-    
+
+    # Step 3: Send welcome email
+    try:
+        send_welcome_email(email, name)
+    except Exception:
+        pass  # Don't fail confirmation if welcome email fails
+
     return MessageResponse(message="Subscription confirmed!", success=True)
 
 

@@ -68,3 +68,35 @@ def send_welcome_email(to_email: str, name: str) -> dict:
         "subject": f"Welcome to {settings.api_title}!",
         "html": html
     })
+
+
+def send_newsletter_email(
+    to_email: str,
+    subject: str,
+    content_html: str,
+    newsletter_slug: str
+) -> dict:
+    """Send newsletter to a subscriber."""
+    unsubscribe_url = f"{settings.base_url}/unsubscribe?email={to_email}"
+    tracking_url = f"{settings.base_url}/track/open/{newsletter_slug}?email={to_email}"
+
+    html = render_template(
+        "newsletter.html",
+        subject=subject,
+        content_html=content_html,
+        newsletter_name=settings.api_title,
+        unsubscribe_url=unsubscribe_url,
+        tracking_url=tracking_url,
+        year=datetime.now().year
+    )
+
+    if not settings.resend_api_key:
+        print(f"[DEV] Newsletter '{newsletter_slug}' to {to_email}")
+        return {"id": "dev-mode"}
+
+    return resend.Emails.send({
+        "from": settings.from_email,
+        "to": to_email,
+        "subject": subject,
+        "html": html
+    })
