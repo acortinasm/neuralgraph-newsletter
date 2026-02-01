@@ -66,6 +66,8 @@ curl https://api.example.com/newsletters/ \
 
 ### 1. Subscribe a User (Public)
 
+Sends a confirmation email. After confirmation, a welcome email is sent automatically.
+
 ```javascript
 // No authentication required
 const response = await fetch('https://api.example.com/subscribers/subscribe', {
@@ -118,11 +120,14 @@ console.log('Hello Newsletter!');
 
 ### 3. Send Newsletter (Admin)
 
+Sends emails to all active subscribers via Resend and creates delivery records.
+
 ```javascript
-await fetch('https://api.example.com/newsletters/issue-42/send', {
+const result = await fetch('https://api.example.com/newsletters/issue-42/send', {
   method: 'POST',
   headers: { 'Authorization': `Bearer ${API_KEY}` }
 });
+// { "message": "Newsletter sent to 150 subscribers", "success": true }
 ```
 
 ---

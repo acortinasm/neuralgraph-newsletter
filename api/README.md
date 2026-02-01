@@ -89,9 +89,11 @@ Pydantic models for request validation and response serialization:
 ### `email.py`
 
 Email functionality using Resend API:
-- Confirmation email sending
+- `send_confirmation_email()` - Double opt-in confirmation
+- `send_welcome_email()` - Sent after subscription confirmation
+- `send_newsletter_email()` - Delivers newsletters to subscribers
 - HTML email templating with Jinja2
-- Token generation for double opt-in
+- Development mode (logs to console when `RESEND_API_KEY` not set)
 
 ## Routers
 

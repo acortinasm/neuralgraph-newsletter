@@ -34,18 +34,21 @@ RETURN s.email, s.confirmation_token;
 
 ### Confirm Subscription
 
-Activates a subscriber by validating their confirmation token.
+Activates a subscriber by validating their confirmation token. After confirmation, a welcome email is sent via Resend.
 
 ```ngql
+-- Step 1: Find and return subscriber info
 MATCH (s:Subscriber)
 WHERE s.confirmation_token = $token
   AND s.status = "pending"
-  AND s.token_expires_at > datetime()
+RETURN s.email, s.name;
+
+-- Step 2: Update subscriber status
+MATCH (s:Subscriber) WHERE s.email = $email
 SET s.status = "active",
     s.confirmed_at = datetime(),
-    s.confirmation_token = null,
-    s.token_expires_at = null
-RETURN s.email, s.name;
+    s.confirmation_token = null
+-- Step 3: Welcome email sent via Resend API
 ```
 
 **Parameters:** `$token`
@@ -156,18 +159,28 @@ RETURN n.subject, l.title, r.position;
 
 ### Send Newsletter
 
-Creates delivery records for all active subscribers and marks the newsletter as sent.
+Sends emails to all active subscribers via Resend, then creates delivery records in the database.
+
+**Flow:**
+1. Fetch newsletter content (subject, HTML)
+2. Query all active subscribers
+3. Send email to each subscriber via Resend API
+4. Create `RECEIVED` relationships and mark newsletter as sent
 
 ```ngql
+-- Step 1: Get active subscribers
+MATCH (s:Subscriber)
+WHERE s.status = "active"
+RETURN s.email;
+
+-- Step 2: After sending emails, create delivery records
 MATCH (n:Newsletter {slug: $newsletter_slug})
-WHERE n.sent_at IS NULL
 MATCH (s:Subscriber)
 WHERE s.status = "active"
 MERGE (s)-[r:RECEIVED]->(n)
 ON CREATE SET r.sent_at = datetime(), r.delivery_status = "sent"
-WITH n, COUNT(r) AS recipient_count
-SET n.sent_at = datetime()
-RETURN n.subject, n.sent_at, recipient_count;
+WITH n
+SET n.sent_at = datetime();
 ```
 
 **Parameters:** `$newsletter_slug`

@@ -2,6 +2,26 @@
 
 All notable changes to the NeuralGraph Newsletter project are documented here.
 
+## [1.3.0] - 2025-02-01
+
+### Added
+
+#### Email Delivery
+- Newsletter sending now actually delivers emails to subscribers via Resend
+- Welcome email sent automatically after subscription confirmation
+- New `newsletter.html` email template with:
+  - Responsive design matching existing templates
+  - Open tracking pixel
+  - Unsubscribe link
+- `send_newsletter_email()` function in `email.py`
+
+### Changed
+- `POST /newsletters/{slug}/send` now sends actual emails (previously only created delivery records)
+- `POST /subscribers/confirm` now sends welcome email after confirmation
+- Subscriber name retrieved during confirmation for personalized welcome
+
+---
+
 ## [1.2.0] - 2025-02-01
 
 ### Added
