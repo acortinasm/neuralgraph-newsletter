@@ -35,11 +35,12 @@ class NeuralGraphClient:
     async def query(self, query: str, params: dict = None) -> dict:
         """Execute NGQL query against NeuralGraphDB."""
         interpolated_query = self._interpolate_params(query, params)
-        
-        print(f"=== QUERY ===")
-        print(interpolated_query)
-        print(f"=============")
-        
+
+        if settings.debug:
+            print(f"=== QUERY ===")
+            print(interpolated_query)
+            print(f"=============")
+
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{self.base_url}/api/query",

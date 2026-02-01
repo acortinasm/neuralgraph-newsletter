@@ -1,10 +1,14 @@
 """Authentication endpoints."""
 import secrets
 from fastapi import APIRouter, HTTPException, Depends, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from typing import Optional
 
 from app.config import settings
-from app.auth import create_access_token, get_current_user, generate_api_key, require_admin
+from app.auth import (
+    create_access_token, get_current_user, generate_api_key, require_admin,
+    store_api_key, revoke_api_key, list_api_keys
+)
 from app.rate_limit import check_rate_limit
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -21,9 +25,22 @@ class TokenResponse(BaseModel):
     expires_in: int = 86400  # 24 hours in seconds
 
 
+class CreateApiKeyRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100, description="Name to identify this API key")
+
+
 class ApiKeyResponse(BaseModel):
     api_key: str
+    prefix: str
+    name: str
     message: str
+
+
+class ApiKeyInfo(BaseModel):
+    prefix: str
+    name: str
+    created_at: Optional[str]
+    revoked: bool
 
 
 async def rate_limit_login(request: Request):
@@ -76,19 +93,54 @@ async def get_me(current_user: dict = Depends(get_current_user)):
 
 
 @router.post("/api-key", response_model=ApiKeyResponse)
-async def create_api_key(admin: dict = Depends(require_admin)):
+async def create_api_key_endpoint(
+    request: CreateApiKeyRequest,
+    admin: dict = Depends(require_admin)
+):
     """
-    Generate a new API key.
+    Generate and store a new API key.
 
-    Note: This generates the key but doesn't store it.
-    You must save it to ADMIN_API_KEY env var to use it.
+    The key is stored securely (hashed) in the database.
+    Save the returned key - it cannot be retrieved later.
     """
     new_key = generate_api_key()
 
+    try:
+        await store_api_key(new_key, request.name)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to store API key")
+
     return ApiKeyResponse(
         api_key=new_key,
-        message="Save this key securely. Set it as ADMIN_API_KEY env var to use it."
+        prefix=new_key[:11],
+        name=request.name,
+        message="Save this key securely. It cannot be retrieved later."
     )
+
+
+@router.get("/api-keys", response_model=list[ApiKeyInfo])
+async def list_api_keys_endpoint(admin: dict = Depends(require_admin)):
+    """List all API keys (shows prefix and name only, not the full key)."""
+    keys = await list_api_keys()
+    return [ApiKeyInfo(**k) for k in keys]
+
+
+@router.delete("/api-key/{key_prefix}")
+async def revoke_api_key_endpoint(
+    key_prefix: str,
+    admin: dict = Depends(require_admin)
+):
+    """
+    Revoke an API key by its prefix.
+
+    The prefix is the first 11 characters of the key (e.g., 'nk_abc12345').
+    """
+    success = await revoke_api_key(key_prefix)
+
+    if not success:
+        raise HTTPException(status_code=404, detail="API key not found or already revoked")
+
+    return {"message": f"API key {key_prefix}... revoked"}
 
 
 @router.post("/verify")

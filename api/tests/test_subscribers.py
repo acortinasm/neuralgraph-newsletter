@@ -19,7 +19,7 @@ class TestSubscribe:
         data = response.json()
         assert data["success"] is True
         assert "check your email" in data["message"].lower()
-        mock_email.assert_called_once()
+        mock_email["confirmation"].assert_called_once()
 
     def test_subscribe_already_active(self, client, mock_db, mock_email):
         """Test subscription fails for already active user."""
@@ -58,10 +58,10 @@ class TestSubscribe:
 class TestConfirm:
     """Tests for POST /subscribers/confirm."""
 
-    def test_confirm_valid_token(self, client, mock_db):
+    def test_confirm_valid_token(self, client, mock_db, mock_email):
         """Test successful confirmation with valid token."""
         mock_db.execute.side_effect = [
-            [{"s.email": "test@example.com"}],  # Find subscriber
+            [{"s.email": "test@example.com", "s.name": "Test User"}],  # Find subscriber
             []  # Update result
         ]
 
@@ -73,7 +73,21 @@ class TestConfirm:
         assert response.status_code == 200
         assert response.json()["success"] is True
 
-    def test_confirm_invalid_token(self, client, mock_db):
+    def test_confirm_sends_welcome_email(self, client, mock_db, mock_email):
+        """Test that confirmation sends a welcome email."""
+        mock_db.execute.side_effect = [
+            [{"s.email": "test@example.com", "s.name": "Test User"}],
+            []
+        ]
+
+        client.post(
+            "/subscribers/confirm",
+            json={"token": "abcdefghij1234567890"}
+        )
+
+        mock_email["welcome"].assert_called_once_with("test@example.com", "Test User")
+
+    def test_confirm_invalid_token(self, client, mock_db, mock_email):
         """Test confirmation fails with invalid token."""
         mock_db.execute.return_value = []
 

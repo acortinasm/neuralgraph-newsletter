@@ -56,6 +56,12 @@ def mock_db():
 
 @pytest.fixture
 def mock_email():
-    """Mock the email sending function."""
-    with patch("app.routers.subscribers.send_confirmation_email") as mock:
-        yield mock
+    """Mock all email sending functions."""
+    with patch("app.routers.subscribers.send_confirmation_email") as mock_confirm, \
+         patch("app.routers.subscribers.send_welcome_email") as mock_welcome, \
+         patch("app.routers.newsletters.send_newsletter_email") as mock_newsletter:
+        yield {
+            "confirmation": mock_confirm,
+            "welcome": mock_welcome,
+            "newsletter": mock_newsletter
+        }

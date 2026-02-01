@@ -37,14 +37,16 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Configure for production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS - configure via CORS_ORIGINS env var (comma-separated)
+cors_origins = settings.cors_origins_list
+if cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # Routers
 app.include_router(auth.router)

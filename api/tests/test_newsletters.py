@@ -113,19 +113,47 @@ class TestAddLink:
 class TestSendNewsletter:
     """Tests for POST /newsletters/{slug}/send."""
 
-    def test_send_newsletter(self, client, mock_db, auth_headers):
+    def test_send_newsletter(self, client, mock_db, mock_email, auth_headers):
         """Test successful newsletter send."""
         mock_db.execute.side_effect = [
-            [{"n.subject": "Test Newsletter", "n.sent_at": None}],  # Newsletter exists, not sent
-            [{"recipient_count": 42}]  # Send result
+            [{"n.subject": "Test Newsletter", "n.sent_at": None, "n.content_html": "<p>Content</p>"}],
+            [{"s.email": "user1@example.com"}, {"s.email": "user2@example.com"}],  # Active subscribers
+            []  # Create delivery records
         ]
 
         response = client.post("/newsletters/issue-1/send", headers=auth_headers)
 
         assert response.status_code == 200
-        assert "42" in response.json()["message"]
+        assert "2" in response.json()["message"]
 
-    def test_send_nonexistent_newsletter(self, client, mock_db, auth_headers):
+    def test_send_newsletter_sends_emails(self, client, mock_db, mock_email, auth_headers):
+        """Test that sending newsletter actually sends emails to subscribers."""
+        mock_db.execute.side_effect = [
+            [{"n.subject": "Test Newsletter", "n.sent_at": None, "n.content_html": "<p>Hello</p>"}],
+            [{"s.email": "user1@example.com"}, {"s.email": "user2@example.com"}],
+            []
+        ]
+
+        client.post("/newsletters/issue-1/send", headers=auth_headers)
+
+        assert mock_email["newsletter"].call_count == 2
+        mock_email["newsletter"].assert_any_call(
+            "user1@example.com", "Test Newsletter", "<p>Hello</p>", "issue-1"
+        )
+
+    def test_send_newsletter_no_subscribers(self, client, mock_db, mock_email, auth_headers):
+        """Test sending newsletter with no active subscribers fails."""
+        mock_db.execute.side_effect = [
+            [{"n.subject": "Test Newsletter", "n.sent_at": None, "n.content_html": "<p>Content</p>"}],
+            []  # No active subscribers
+        ]
+
+        response = client.post("/newsletters/issue-1/send", headers=auth_headers)
+
+        assert response.status_code == 400
+        assert "no active subscribers" in response.json()["detail"].lower()
+
+    def test_send_nonexistent_newsletter(self, client, mock_db, mock_email, auth_headers):
         """Test sending non-existent newsletter fails."""
         mock_db.execute.return_value = []
 
@@ -133,10 +161,10 @@ class TestSendNewsletter:
 
         assert response.status_code == 404
 
-    def test_send_already_sent_newsletter(self, client, mock_db, auth_headers):
+    def test_send_already_sent_newsletter(self, client, mock_db, mock_email, auth_headers):
         """Test re-sending an already sent newsletter fails."""
         mock_db.execute.return_value = [
-            {"n.subject": "Test", "n.sent_at": "2024-01-01T00:00:00Z"}
+            {"n.subject": "Test", "n.sent_at": "2024-01-01T00:00:00Z", "n.content_html": "<p>Test</p>"}
         ]
 
         response = client.post("/newsletters/issue-1/send", headers=auth_headers)

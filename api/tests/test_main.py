@@ -53,8 +53,15 @@ def test_readiness_endpoint_db_up(client, mock_db):
     assert data["checks"]["database"] == "healthy"
 
 
-def test_cors_headers(client):
-    """Test CORS headers are present."""
+def test_cors_headers_when_not_configured(client):
+    """Test CORS headers are not present when not configured.
+
+    CORS is only enabled when:
+    - DEBUG=true (allows all origins), or
+    - CORS_ORIGINS is set (allows specified origins)
+
+    By default in tests, neither is set, so CORS middleware is not added.
+    """
     response = client.options(
         "/",
         headers={
@@ -63,4 +70,6 @@ def test_cors_headers(client):
         }
     )
 
-    assert "access-control-allow-origin" in response.headers
+    # CORS not enabled by default - verify no CORS headers
+    # This is the expected secure production behavior
+    assert "access-control-allow-origin" not in response.headers

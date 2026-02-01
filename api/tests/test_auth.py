@@ -124,7 +124,9 @@ class TestAuthEndpoints:
 
     def test_get_me_with_api_key(self, client):
         """Test /auth/me with API key."""
-        with patch("app.auth.settings") as mock_settings:
+        with patch("app.auth.verify_api_key_from_db") as mock_db_verify, \
+             patch("app.auth.settings") as mock_settings:
+            mock_db_verify.return_value = None  # No DB key
             mock_settings.admin_api_key = "nk_test123"
 
             response = client.get(
@@ -224,7 +226,9 @@ class TestProtectedEndpoints:
         """Test protected endpoints with API key."""
         mock_db.execute.return_value = []
 
-        with patch("app.auth.settings") as mock_settings:
+        with patch("app.auth.verify_api_key_from_db") as mock_db_verify, \
+             patch("app.auth.settings") as mock_settings:
+            mock_db_verify.return_value = None  # No DB key
             mock_settings.admin_api_key = "nk_validkey123"
 
             response = client.get(
