@@ -1,0 +1,78 @@
+-- ============================================================================
+-- SUBSCRIBER MANAGEMENT QUERIES
+-- ============================================================================
+
+-- 1. Create pending subscriber (signup)
+-- Params: $email, $name, $token
+CREATE (s:Subscriber {
+    email: $email,
+    name: $name,
+    status: "pending",
+    subscribed_at: datetime(),
+    confirmation_token: $token,
+    token_expires_at: datetime() + duration("P7D")
+})
+RETURN s.email, s.confirmation_token;
+
+-- 2. Confirm subscription
+-- Params: $token
+MATCH (s:Subscriber)
+WHERE s.confirmation_token = $token
+  AND s.status = "pending"
+  AND s.token_expires_at > datetime()
+SET s.status = "active",
+    s.confirmed_at = datetime(),
+    s.confirmation_token = null,
+    s.token_expires_at = null
+RETURN s.email, s.name;
+
+-- 3. Log confirmation event
+-- Params: $email
+MATCH (s:Subscriber) WHERE s.email = $email
+CREATE (e:Event {type: "confirmed", occurred_at: datetime()})
+CREATE (s)-[:LOGGED]->(e);
+
+-- 4. Resend confirmation
+-- Params: $email, $new_token
+MATCH (s:Subscriber)
+WHERE s.email = $email AND s.status = "pending"
+SET s.confirmation_token = $new_token,
+    s.token_expires_at = datetime() + duration("P7D")
+RETURN s.email, s.confirmation_token;
+
+-- 5. Unsubscribe
+-- Params: $email
+MATCH (s:Subscriber)
+WHERE s.email = $email
+SET s.status = "unsubscribed", s.unsubscribed_at = datetime();
+
+-- 6. Get subscriber by email
+-- Params: $email
+MATCH (s:Subscriber)
+WHERE s.email = $email
+RETURN s;
+
+-- 7. Get subscriber with interests
+-- Params: $email
+MATCH (s:Subscriber {email: $email})
+OPTIONAL MATCH (s)-[i:INTERESTED_IN]->(t:Topic)
+RETURN s, COLLECT({topic: t.name, score: i.score}) AS interests
+ORDER BY i.score DESC;
+
+-- 8. All active subscribers
+MATCH (s:Subscriber)
+WHERE s.status = "active"
+RETURN s.email, s.name, s.confirmed_at
+ORDER BY s.confirmed_at DESC;
+
+-- 9. Subscribers by status
+MATCH (s:Subscriber)
+RETURN s.status AS status, COUNT(s) AS count
+ORDER BY count DESC;
+
+-- 10. Cleanup expired pending subscribers
+MATCH (s:Subscriber)
+WHERE s.status = "pending"
+  AND s.token_expires_at < datetime() - duration("P30D")
+DETACH DELETE s;
+

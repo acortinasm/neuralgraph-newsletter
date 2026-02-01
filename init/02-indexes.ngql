@@ -1,0 +1,8 @@
+-- ============================================================================
+-- NeuralGraphDB Newsletter Service - Full-Text Indexes
+-- ============================================================================
+
+CALL neural.fulltext.createIndex('newsletter_search', 'Newsletter', ['subject', 'preview_text'], 'english');
+CALL neural.fulltext.createIndex('link_search', 'Link', ['title', 'description'], 'english');
+CALL neural.fulltext.createIndex('subscriber_search', 'Subscriber', ['email', 'name'], 'english', 'metaphone');
+CALL neural.fulltext.createIndex('topic_search', 'Topic', ['name', 'description'], 'english');

@@ -1,0 +1,10 @@
+-- ============================================================================
+-- NeuralGraphDB Newsletter Service - Schema Initialization
+-- ============================================================================
+
+CREATE (t:Topic {name: "Rust", slug: "rust", description: "Rust programming language"});
+CREATE (t:Topic {name: "Graph Databases", slug: "graph-databases", description: "Graph data modeling and queries"});
+CREATE (t:Topic {name: "AI/ML", slug: "ai-ml", description: "Artificial intelligence and machine learning"});
+CREATE (t:Topic {name: "Performance", slug: "performance", description: "Optimization and benchmarking"});
+CREATE (t:Topic {name: "Distributed Systems", slug: "distributed-systems", description: "Distributed computing and consensus"});
+CREATE (t:Topic {name: "Vector Search", slug: "vector-search", description: "Similarity search and embeddings"});

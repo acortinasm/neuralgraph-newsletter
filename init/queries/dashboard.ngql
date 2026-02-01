@@ -1,0 +1,99 @@
+-- ============================================================================
+-- DASHBOARD & ANALYTICS
+-- ============================================================================
+
+-- 1. Subscriber summary
+MATCH (s:Subscriber)
+RETURN s.status AS status, COUNT(s) AS count
+ORDER BY count DESC;
+
+-- 2. Total active subscribers
+MATCH (s:Subscriber)
+WHERE s.status = "active"
+RETURN COUNT(s) AS active_subscribers;
+
+-- 3. Subscriber growth (last 12 months)
+MATCH (s:Subscriber)
+WHERE s.confirmed_at IS NOT NULL
+WITH s, substring(toString(s.confirmed_at), 0, 7) AS month
+RETURN month, COUNT(s) AS new_subscribers
+ORDER BY month DESC
+LIMIT 12;
+
+-- 4. Recent newsletter performance
+MATCH (n:Newsletter)
+WHERE n.sent_at > datetime() - duration("P90D")
+OPTIONAL MATCH (s:Subscriber)-[r:RECEIVED]->(n)
+WITH n, 
+     COUNT(r) AS sent,
+     COUNT(CASE WHEN r.opened_at IS NOT NULL THEN 1 END) AS opened,
+     COUNT(CASE WHEN r.delivery_status = "bounced" THEN 1 END) AS bounced
+OPTIONAL MATCH (:Subscriber)-[c:CLICKED]->(l:Link)<-[:LINKS_TO]-(n)
+WITH n, sent, opened, bounced, COUNT(c) AS clicks
+RETURN 
+    n.slug,
+    n.subject,
+    n.sent_at,
+    sent,
+    opened,
+    CASE WHEN sent > 0 THEN round(100.0 * opened / sent, 1) ELSE 0 END AS open_rate_pct,
+    clicks,
+    CASE WHEN opened > 0 THEN round(100.0 * clicks / opened, 1) ELSE 0 END AS click_rate_pct,
+    bounced
+ORDER BY n.sent_at DESC;
+
+-- 5. Most engaged subscribers
+MATCH (s:Subscriber)-[r:RECEIVED]->(n:Newsletter)
+WHERE r.opened_at IS NOT NULL AND s.status = "active"
+WITH s, COUNT(r) AS opens
+OPTIONAL MATCH (s)-[c:CLICKED]->(:Link)
+WITH s, opens, COUNT(c) AS clicks
+RETURN s.email, s.name, opens, clicks, opens + clicks AS engagement_score
+ORDER BY engagement_score DESC
+LIMIT 20;
+
+-- 6. Bounce rate (last 30 days)
+MATCH (n:Newsletter)
+WHERE n.sent_at > datetime() - duration("P30D")
+MATCH (s:Subscriber)-[r:RECEIVED]->(n)
+WITH 
+    COUNT(r) AS total_sent,
+    COUNT(CASE WHEN r.delivery_status = "bounced" THEN 1 END) AS bounces
+RETURN 
+    total_sent,
+    bounces AS hard_bounces,
+    round(100.0 * bounces / total_sent, 2) AS bounce_rate_pct;
+
+-- 7. Top performing links
+MATCH (l:Link)<-[c:CLICKED]-(s:Subscriber)
+OPTIONAL MATCH (l)-[:ABOUT]->(t:Topic)
+RETURN l.title, l.url, l.domain,
+       COUNT(DISTINCT s) AS unique_clickers,
+       SUM(c.click_count) AS total_clicks,
+       COLLECT(DISTINCT t.name) AS topics
+ORDER BY total_clicks DESC
+LIMIT 20;
+
+-- 8. Topic engagement ranking
+MATCH (t:Topic)<-[:ABOUT]-(l:Link)<-[c:CLICKED]-(s:Subscriber)
+RETURN t.name, t.slug,
+       COUNT(DISTINCT l) AS links,
+       COUNT(DISTINCT s) AS unique_clickers,
+       SUM(c.click_count) AS total_clicks
+ORDER BY total_clicks DESC;
+
+-- 9. Recent events
+MATCH (s:Subscriber)-[:LOGGED]->(e:Event)
+WHERE e.occurred_at > datetime() - duration("P7D")
+RETURN e.type, s.email, e.occurred_at, e.reason
+ORDER BY e.occurred_at DESC
+LIMIT 50;
+
+-- 10. Inactive subscriber count
+MATCH (s:Subscriber)
+WHERE s.status = "active"
+OPTIONAL MATCH (s)-[r:RECEIVED]->(n:Newsletter)
+WHERE r.opened_at IS NOT NULL AND r.opened_at > datetime() - duration("P90D")
+WITH s, COUNT(r) AS recent_opens
+WHERE recent_opens = 0
+RETURN COUNT(s) AS inactive_subscribers;

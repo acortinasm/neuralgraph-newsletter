@@ -1,0 +1,89 @@
+-- ============================================================================
+-- NEWSLETTER & CONTENT MANAGEMENT
+-- ============================================================================
+
+-- 1. Create newsletter issue
+-- Params: $slug, $subject, $preview_text, $external_url
+CREATE (n:Newsletter {
+    slug: $slug,
+    subject: $subject,
+    preview_text: $preview_text,
+    external_url: $external_url,
+    created_at: datetime(),
+    sent_at: null
+})
+RETURN n;
+
+-- 2. Create/update a link
+-- Params: $url, $title, $description, $domain
+MERGE (l:Link {url: $url})
+ON CREATE SET 
+    l.title = $title,
+    l.description = $description,
+    l.domain = $domain,
+    l.created_at = datetime()
+ON MATCH SET
+    l.title = $title,
+    l.description = $description
+RETURN l;
+
+-- 3. Associate link with topics
+-- Params: $url, $topic_slugs (array)
+MATCH (l:Link {url: $url})
+MATCH (t:Topic) WHERE t.slug IN $topic_slugs
+MERGE (l)-[:ABOUT]->(t)
+RETURN l, COLLECT(t.name) AS topics;
+
+-- 4. Add links to newsletter
+-- Params: $newsletter_slug, $url, $position
+MATCH (n:Newsletter {slug: $newsletter_slug})
+MATCH (l:Link {url: $url})
+MERGE (n)-[r:LINKS_TO]->(l)
+SET r.position = $position
+RETURN n.subject, l.title, r.position;
+
+-- 5. Associate newsletter with topics
+-- Params: $newsletter_slug, $topic_slugs
+MATCH (n:Newsletter {slug: $newsletter_slug})
+MATCH (t:Topic) WHERE t.slug IN $topic_slugs
+MERGE (n)-[:COVERS]->(t)
+RETURN n.subject, COLLECT(t.name) AS topics;
+
+-- 6. Get recipients and send newsletter
+-- Params: $newsletter_slug
+MATCH (n:Newsletter {slug: $newsletter_slug})
+WHERE n.sent_at IS NULL
+MATCH (s:Subscriber)
+WHERE s.status = "active"
+MERGE (s)-[r:RECEIVED]->(n)
+ON CREATE SET r.sent_at = datetime(), r.delivery_status = "sent"
+WITH n, COUNT(r) AS recipient_count
+SET n.sent_at = datetime()
+RETURN n.subject, n.sent_at, recipient_count;
+
+-- 7. Get newsletter by slug
+-- Params: $slug
+MATCH (n:Newsletter {slug: $slug})
+OPTIONAL MATCH (n)-[:LINKS_TO]->(l:Link)
+OPTIONAL MATCH (n)-[:COVERS]->(t:Topic)
+RETURN n, 
+       COLLECT(DISTINCT {url: l.url, title: l.title}) AS links,
+       COLLECT(DISTINCT t.name) AS topics;
+
+-- 8. List all sent newsletters
+MATCH (n:Newsletter)
+WHERE n.sent_at IS NOT NULL
+RETURN n.slug, n.subject, n.sent_at, n.external_url
+ORDER BY n.sent_at DESC;
+
+-- 9. List draft newsletters
+MATCH (n:Newsletter)
+WHERE n.sent_at IS NULL
+RETURN n.slug, n.subject, n.created_at
+ORDER BY n.created_at DESC;
+
+-- 10. Delete draft newsletter
+-- Params: $slug
+MATCH (n:Newsletter {slug: $slug})
+WHERE n.sent_at IS NULL
+DETACH DELETE n;

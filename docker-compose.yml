@@ -1,0 +1,14 @@
+services:
+  api:
+    build: ./api
+    container_name: newsletter-api
+    ports:
+      - "8000:8000"
+    environment:
+      - NEURALGRAPH_URL=http://host.docker.internal:3000
+      - RESEND_API_KEY=re_Kjszkh7m_FgDHPooXCJ7sKBSzt6azXqxw
+      - FROM_EMAIL=NeuralGraph <newsletter@neuralgraph.dev>
+      - BASE_URL=https://neuralgraph.dev
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

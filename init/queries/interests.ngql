@@ -1,0 +1,79 @@
+-- ============================================================================
+-- INFERRED INTERESTS & PERSONALIZATION
+-- ============================================================================
+
+-- 1. Recalculate interests for one subscriber
+-- Params: $email
+MATCH (s:Subscriber {email: $email})-[c:CLICKED]->(l:Link)-[:ABOUT]->(t:Topic)
+WITH s, t, SUM(c.click_count) AS total_clicks, MAX(c.clicked_at) AS last_click
+MERGE (s)-[i:INTERESTED_IN]->(t)
+SET i.score = total_clicks, i.last_updated = datetime()
+RETURN t.name, i.score, last_click
+ORDER BY i.score DESC;
+
+-- 2. Batch recalculate all interests
+MATCH (s:Subscriber)-[c:CLICKED]->(l:Link)-[:ABOUT]->(t:Topic)
+WHERE s.status = "active"
+WITH s, t, SUM(c.click_count) AS total_clicks
+MERGE (s)-[i:INTERESTED_IN]->(t)
+SET i.score = total_clicks, i.last_updated = datetime()
+RETURN COUNT(DISTINCT s) AS subscribers_updated;
+
+-- 3. Top interests for subscriber
+-- Params: $email
+MATCH (s:Subscriber {email: $email})-[i:INTERESTED_IN]->(t:Topic)
+RETURN t.name, t.slug, i.score
+ORDER BY i.score DESC
+LIMIT 5;
+
+-- 4. Subscribers interested in topic
+-- Params: $topic_slug
+MATCH (s:Subscriber)-[i:INTERESTED_IN]->(t:Topic {slug: $topic_slug})
+WHERE s.status = "active"
+RETURN s.email, s.name, i.score
+ORDER BY i.score DESC
+LIMIT 50;
+
+-- 5. Highly engaged subscribers by topic
+-- Params: $topic_slugs, $min_opens
+MATCH (s:Subscriber)-[i:INTERESTED_IN]->(t:Topic)
+WHERE s.status = "active" AND t.slug IN $topic_slugs
+WITH s, SUM(i.score) AS topic_affinity
+WHERE topic_affinity >= 3
+MATCH (s)-[r:RECEIVED]->(n:Newsletter)
+WHERE r.opened_at IS NOT NULL
+WITH s, topic_affinity, COUNT(r) AS opens
+WHERE opens >= $min_opens
+RETURN s.email, s.name, topic_affinity, opens
+ORDER BY topic_affinity DESC;
+
+-- 6. Inactive subscribers (no opens in 90 days)
+MATCH (s:Subscriber)
+WHERE s.status = "active"
+OPTIONAL MATCH (s)-[r:RECEIVED]->(n:Newsletter)
+WHERE r.opened_at IS NOT NULL AND r.opened_at > datetime() - duration("P90D")
+WITH s, COUNT(r) AS recent_opens
+WHERE recent_opens = 0
+RETURN s.email, s.name, s.confirmed_at
+ORDER BY s.confirmed_at DESC;
+
+-- 7. Content recommendations (collaborative filtering)
+-- Params: $email
+MATCH (s:Subscriber {email: $email})-[:INTERESTED_IN]->(t:Topic)
+WITH s, COLLECT(t) AS my_topics
+MATCH (other:Subscriber)-[:INTERESTED_IN]->(t:Topic)
+WHERE other <> s AND t IN my_topics AND other.status = "active"
+WITH s, other, COUNT(t) AS shared_topics
+WHERE shared_topics >= 2
+MATCH (other)-[:CLICKED]->(l:Link)
+WHERE NOT EXISTS((s)-[:CLICKED]->(l))
+RETURN l.title, l.url, COUNT(DISTINCT other) AS recommended_by
+ORDER BY recommended_by DESC
+LIMIT 5;
+
+-- 8. Topic popularity
+MATCH (t:Topic)<-[:ABOUT]-(l:Link)<-[c:CLICKED]-(s:Subscriber)
+RETURN t.name, t.slug,
+       COUNT(DISTINCT s) AS unique_clickers,
+       SUM(c.click_count) AS total_clicks
+ORDER BY total_clicks DESC;

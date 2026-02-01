@@ -1,0 +1,77 @@
+-- ============================================================================
+-- ENGAGEMENT TRACKING
+-- ============================================================================
+
+-- 1. Record email open
+-- Params: $email, $newsletter_slug
+MATCH (s:Subscriber {email: $email})-[r:RECEIVED]->(n:Newsletter {slug: $newsletter_slug})
+SET r.opened_at = COALESCE(r.opened_at, datetime()),
+    r.open_count = COALESCE(r.open_count, 0) + 1
+RETURN r.opened_at, r.open_count;
+
+-- 2. Record link click
+-- Params: $email, $url
+MATCH (s:Subscriber {email: $email}), (l:Link {url: $url})
+MERGE (s)-[c:CLICKED]->(l)
+ON CREATE SET c.clicked_at = datetime(), c.click_count = 1
+ON MATCH SET c.click_count = c.click_count + 1
+RETURN c.clicked_at, c.click_count;
+
+-- 3. Record hard bounce
+-- Params: $email, $newsletter_slug, $bounce_reason
+MATCH (s:Subscriber {email: $email})
+SET s.status = "bounced"
+CREATE (e:Event {
+    type: "hard_bounce",
+    occurred_at: datetime(),
+    reason: $bounce_reason
+})
+CREATE (s)-[:LOGGED]->(e)
+WITH s
+MATCH (s)-[r:RECEIVED]->(n:Newsletter {slug: $newsletter_slug})
+SET r.delivery_status = "bounced"
+RETURN s.email, s.status;
+
+-- 4. Record soft bounce
+-- Params: $email, $newsletter_slug, $bounce_reason
+MATCH (s:Subscriber {email: $email})-[r:RECEIVED]->(n:Newsletter {slug: $newsletter_slug})
+SET r.delivery_status = "soft_bounced"
+WITH s, r
+CREATE (e:Event {type: "soft_bounce", occurred_at: datetime(), reason: $bounce_reason})
+CREATE (s)-[:LOGGED]->(e)
+RETURN s.email, r.delivery_status;
+
+-- 5. Record spam complaint
+-- Params: $email, $feedback_type
+MATCH (s:Subscriber {email: $email})
+SET s.status = "complained"
+CREATE (e:Event {
+    type: "complaint",
+    occurred_at: datetime(),
+    reason: "spam_report"
+})
+CREATE (s)-[:LOGGED]->(e)
+RETURN s.email, s.status;
+
+-- 6. Get delivery status for newsletter
+-- Params: $newsletter_slug
+MATCH (n:Newsletter {slug: $newsletter_slug})
+MATCH (s:Subscriber)-[r:RECEIVED]->(n)
+RETURN r.delivery_status AS status, COUNT(r) AS count
+ORDER BY count DESC;
+
+-- 7. Subscribers with delivery issues
+MATCH (s:Subscriber)-[:LOGGED]->(e:Event)
+WHERE e.type IN ["hard_bounce", "soft_bounce", "complaint"]
+  AND e.occurred_at > datetime() - duration("P90D")
+WITH s, COUNT(e) AS issue_count, COLLECT(e.type) AS issue_types
+WHERE issue_count >= 2
+RETURN s.email, s.status, issue_count, issue_types
+ORDER BY issue_count DESC;
+
+-- 8. Recent events audit log
+MATCH (s:Subscriber)-[:LOGGED]->(e:Event)
+WHERE e.occurred_at > datetime() - duration("P7D")
+RETURN e.type, s.email, e.occurred_at, e.reason
+ORDER BY e.occurred_at DESC
+LIMIT 100;
