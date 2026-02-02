@@ -8,6 +8,7 @@ services:
       - NEURALGRAPH_URL=${NEURALGRAPH_URL:-http://host.docker.internal:3000}
       - RESEND_API_KEY=${RESEND_API_KEY}
       - FROM_EMAIL=${FROM_EMAIL:-newsletter@example.com}
+      - CONTACT_EMAIL=${CONTACT_EMAIL}
       - BASE_URL=${BASE_URL:-http://localhost:8000}
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
       - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
