@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     # Email (Resend)
     resend_api_key: str = ""
     from_email: str = "newsletter@example.com"
+    contact_email: str = ""  # Email address to receive contact form submissions
 
     # Rate limiting
     rate_limit_requests: int = 10

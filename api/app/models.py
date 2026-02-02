@@ -218,3 +218,23 @@ class StatsResponse(BaseModel):
     active: int
     pending: int
     unsubscribed: int
+
+
+# ============================================================================
+# Contact
+# ============================================================================
+
+class ContactRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    email: EmailStr
+    message: str = Field(..., min_length=1, max_length=5000)
+
+    @field_validator("name")
+    @classmethod
+    def sanitize_name(cls, v: str) -> str:
+        return sanitize_string(v, max_length=100)
+
+    @field_validator("message")
+    @classmethod
+    def sanitize_message(cls, v: str) -> str:
+        return sanitize_string(v, max_length=5000)

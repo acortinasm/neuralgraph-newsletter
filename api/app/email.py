@@ -100,3 +100,26 @@ def send_newsletter_email(
         "subject": subject,
         "html": html
     })
+
+
+def send_contact_email(name: str, email: str, message: str) -> dict:
+    """Send contact form submission email."""
+    html = render_template(
+        "contact.html",
+        name=name,
+        email=email,
+        message=message,
+        year=datetime.now().year
+    )
+
+    if not settings.resend_api_key:
+        print(f"[DEV] Contact form from {name} <{email}>: {message[:100]}...")
+        return {"id": "dev-mode"}
+
+    return resend.Emails.send({
+        "from": settings.from_email,
+        "to": settings.contact_email,
+        "reply_to": email,
+        "subject": f"[Contact] {name}",
+        "html": html
+    })

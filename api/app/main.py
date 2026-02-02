@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import subscribers, newsletters, tracking, analytics, auth
+from app.routers import subscribers, newsletters, tracking, analytics, auth, contact
 from app.logging_config import setup_logging, get_logger
 from app.email import init_resend
 from app.database import db
@@ -54,6 +54,7 @@ app.include_router(subscribers.router)
 app.include_router(newsletters.router)
 app.include_router(tracking.router)
 app.include_router(analytics.router)
+app.include_router(contact.router)
 
 
 @app.get("/")
