@@ -54,10 +54,10 @@ class TestSubscribe:
 
 
 class TestConfirm:
-    """Tests for POST /subscribers/confirm."""
+    """Tests for /subscribers/confirm (GET and POST)."""
 
-    def test_confirm_valid_token(self, client, mock_db, mock_email):
-        """Test successful confirmation with valid token."""
+    def test_confirm_valid_token_post(self, client, mock_db, mock_email):
+        """Test successful confirmation with valid token via POST."""
         mock_db.execute.side_effect = [
             [{"s.email": "test@example.com", "s.name": "Test User"}],  # Find subscriber
             []  # Update result
@@ -67,6 +67,18 @@ class TestConfirm:
             "/subscribers/confirm",
             json={"token": "abcdefghij1234567890"}  # 20+ chars required
         )
+
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+
+    def test_confirm_valid_token_get(self, client, mock_db, mock_email):
+        """Test successful confirmation with valid token via GET (email link)."""
+        mock_db.execute.side_effect = [
+            [{"s.email": "test@example.com", "s.name": "Test User"}],  # Find subscriber
+            []  # Update result
+        ]
+
+        response = client.get("/subscribers/confirm?token=abcdefghij1234567890")
 
         assert response.status_code == 200
         assert response.json()["success"] is True
@@ -97,6 +109,15 @@ class TestConfirm:
         assert response.status_code == 400
         assert "invalid" in response.json()["detail"].lower()
 
+    def test_confirm_invalid_token_get(self, client, mock_db, mock_email):
+        """Test GET confirmation fails with invalid token."""
+        mock_db.execute.return_value = []
+
+        response = client.get("/subscribers/confirm?token=abcdefghij1234567890")
+
+        assert response.status_code == 400
+        assert "invalid" in response.json()["detail"].lower()
+
     def test_confirm_token_too_short(self, client):
         """Test confirmation fails with token that's too short."""
         response = client.post(
@@ -105,6 +126,13 @@ class TestConfirm:
         )
 
         assert response.status_code == 422
+
+    def test_confirm_token_too_short_get(self, client):
+        """Test GET confirmation fails with token that's too short."""
+        response = client.get("/subscribers/confirm?token=short")
+
+        assert response.status_code == 400
+        assert "invalid" in response.json()["detail"].lower()
 
 
 class TestUnsubscribe:

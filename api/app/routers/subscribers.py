@@ -68,9 +68,11 @@ async def subscribe(request: SubscribeRequest, _: None = Depends(rate_limit_subs
     )
 
 
-@router.post("/confirm", response_model=MessageResponse)
-async def confirm(request: ConfirmRequest):
-    """Confirm subscription with token."""
+async def _confirm_token(token: str) -> MessageResponse:
+    """Internal helper to confirm a subscription token."""
+    # Validate token format
+    if not token or len(token) < 20 or len(token) > 100:
+        raise HTTPException(400, "Invalid token format")
 
     # Step 1: Find the subscriber with this token
     result = await db.execute(
@@ -79,7 +81,7 @@ async def confirm(request: ConfirmRequest):
         WHERE s.confirmation_token = $token AND s.status = "pending"
         RETURN s.email, s.name
         ''',
-        {"token": request.token}
+        {"token": token}
     )
 
     if not result:
@@ -106,6 +108,18 @@ async def confirm(request: ConfirmRequest):
         pass  # Don't fail confirmation if welcome email fails
 
     return MessageResponse(message="Subscription confirmed!", success=True)
+
+
+@router.get("/confirm", response_model=MessageResponse)
+async def confirm_get(token: str):
+    """Confirm subscription via GET request (for email links)."""
+    return await _confirm_token(token)
+
+
+@router.post("/confirm", response_model=MessageResponse)
+async def confirm(request: ConfirmRequest):
+    """Confirm subscription with token (POST)."""
+    return await _confirm_token(request.token)
 
 
 @router.post("/unsubscribe", response_model=MessageResponse)

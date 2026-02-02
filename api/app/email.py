@@ -24,7 +24,7 @@ def render_template(template_name: str, **context) -> str:
 
 def send_confirmation_email(to_email: str, name: str, token: str) -> dict:
     """Send subscription confirmation email."""
-    confirm_url = f"{settings.base_url}/confirm?token={token}"
+    confirm_url = f"{settings.base_url}/subscribers/confirm?token={token}"
 
     html = render_template(
         "confirmation.html",
