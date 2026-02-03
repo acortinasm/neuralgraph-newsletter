@@ -5,6 +5,7 @@ This guide covers how to integrate with the NeuralGraph Newsletter API from vari
 ## Table of Contents
 
 - [Authentication](#authentication)
+- [Server Configuration](#server-configuration)
 - [Quick Start](#quick-start)
 - [Common Integrations](#common-integrations)
   - [Website Integration](#website-integration)
@@ -76,6 +77,64 @@ curl -X DELETE https://api.example.com/auth/api-key/nk_abc1234 \
 | `GET /track/open/{slug}/{email}` | Tracking pixel |
 | `GET /track/click` | Click tracking |
 | `GET /health/*` | Health checks |
+
+---
+
+## Server Configuration
+
+### Persistence Settings
+
+The NeuralGraphDB backend automatically persists data to disk. Configure persistence behavior with environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NGDB_PATH` | `data/graph.ngdb` | Database file path |
+| `NGDB_SAVE_INTERVAL` | `60` | Seconds between periodic saves |
+| `NGDB_SAVE_THRESHOLD` | `10` | Mutations before auto-save triggers |
+| `NGDB_BACKUP_COUNT` | `3` | Number of backup copies to retain |
+| `NGDB_SHUTDOWN_TIMEOUT` | `30` | Graceful shutdown timeout in seconds |
+
+### Docker Compose Example
+
+```yaml
+services:
+  newsletter-api:
+    image: neuralgraph/newsletter:latest
+    environment:
+      - NGDB_PATH=/data/graph.ngdb
+      - NGDB_SAVE_INTERVAL=60
+      - NGDB_SAVE_THRESHOLD=10
+      - NGDB_BACKUP_COUNT=3
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+    volumes:
+      - newsletter-data:/data
+    ports:
+      - "8000:8000"
+
+volumes:
+  newsletter-data:
+```
+
+### Data Durability
+
+The API provides multiple layers of data protection:
+
+| Layer | Description |
+|-------|-------------|
+| **WAL (Write-Ahead Log)** | Every mutation logged before applying |
+| **Threshold-based saves** | Snapshot after N mutations |
+| **Periodic saves** | Snapshot every M seconds if changes occurred |
+| **Backup rotation** | N previous versions retained |
+| **Graceful shutdown** | Final save before exit |
+
+**Backup files:** `graph.backup.1.ngdb`, `graph.backup.2.ngdb`, etc. (most recent = `.backup.1`)
+
+### Recovery
+
+- **Clean restart:** Data loads from latest snapshot
+- **Crash recovery:** WAL replays uncommitted mutations on startup
+- **Corruption recovery:** Restore from backup files if needed
 
 ---
 
