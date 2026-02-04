@@ -2,6 +2,31 @@
 
 All notable changes to the NeuralGraph Newsletter project are documented here.
 
+## [1.4.1] - 2026-02-04
+
+### Fixed
+
+#### NeuralGraphDB Compatibility
+- Replaced all `datetime()` function calls with Python-computed ISO timestamps
+- NeuralGraphDB doesn't support Neo4j's `datetime()` function natively
+- Added `now_iso()` helper functions to `newsletters.py` and `tracking.py`
+- Fixed 13 instances across newsletter and tracking endpoints:
+  - `newsletters.py`: create, update, add link, send, render (7 fixes)
+  - `tracking.py`: open tracking, click tracking, bounce, complaint (6 fixes)
+
+**Pattern applied:**
+```python
+# Before (broken with NeuralGraphDB)
+SET n.created_at = datetime()
+
+# After (working)
+SET n.created_at = $now
+...
+params = {"now": now_iso()}
+```
+
+---
+
 ## [1.4.0] - 2025-02-01
 
 ### Added

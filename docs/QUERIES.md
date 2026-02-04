@@ -4,11 +4,45 @@ This document provides a reference for the NGQL queries used by the Newsletter A
 
 ## Table of Contents
 
+- [NeuralGraphDB Compatibility](#neuralgraphdb-compatibility)
 - [Subscriber Management](#subscriber-management)
 - [Newsletter Management](#newsletter-management)
 - [Engagement Tracking](#engagement-tracking)
 - [Interest Inference](#interest-inference)
 - [Analytics](#analytics)
+
+---
+
+## NeuralGraphDB Compatibility
+
+> **Important:** NeuralGraphDB does not support Neo4j's built-in `datetime()` or `duration()` functions.
+
+The queries in this document show the **logical intent** using Cypher-like syntax. In the actual implementation, all datetime values are computed in Python and passed as query parameters.
+
+### Pattern Used
+
+```python
+# Helper function (in each router file)
+def now_iso():
+    return datetime.utcnow().isoformat() + "Z"
+
+# Query execution
+await db.execute(
+    "CREATE (n:Node {created_at: $now})",
+    {"now": now_iso()}
+)
+```
+
+### Date Arithmetic
+
+For date calculations (e.g., "7 days from now"), compute in Python:
+
+```python
+from datetime import datetime, timedelta
+
+# Instead of: datetime() + duration("P7D")
+expires_at = (datetime.utcnow() + timedelta(days=7)).isoformat() + "Z"
+```
 
 ---
 
