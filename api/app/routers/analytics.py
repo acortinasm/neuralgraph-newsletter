@@ -1,6 +1,12 @@
 from fastapi import APIRouter, Depends
+from datetime import datetime, timedelta
 from app.database import db
 from app.auth import require_admin
+
+
+def get_cutoff_date(days: int) -> str:
+    """Get ISO-formatted cutoff date for N days ago."""
+    return (datetime.utcnow() - timedelta(days=days)).isoformat() + "Z"
 
 router = APIRouter(prefix="/analytics", tags=["analytics"], dependencies=[Depends(require_admin)])
 
@@ -38,11 +44,12 @@ async def subscriber_growth(months: int = 12):
 @router.get("/newsletters/performance")
 async def newsletter_performance(days: int = 90):
     """Get recent newsletter performance metrics."""
+    cutoff = get_cutoff_date(days)
 
     return await db.execute(
-        f"""
+        """
         MATCH (n:Newsletter)
-        WHERE n.sent_at > datetime() - duration("P{days}D")
+        WHERE n.sent_at > $cutoff
         OPTIONAL MATCH (s:Subscriber)-[r:RECEIVED]->(n)
         WITH n,
              COUNT(r) AS sent,
@@ -61,7 +68,8 @@ async def newsletter_performance(days: int = 90):
             CASE WHEN opened > 0 THEN round(100.0 * clicks / opened, 1) ELSE 0 END AS click_rate,
             bounced
         ORDER BY n.sent_at DESC
-        """
+        """,
+        {"cutoff": cutoff}
     )
 
 
@@ -121,31 +129,34 @@ async def topic_engagement():
 @router.get("/health/bounces")
 async def bounce_rate(days: int = 30):
     """Get bounce rate for recent newsletters."""
+    cutoff = get_cutoff_date(days)
 
     return await db.execute(
-        f"""
+        """
         MATCH (n:Newsletter)
-        WHERE n.sent_at > datetime() - duration("P{days}D")
+        WHERE n.sent_at > $cutoff
         MATCH (s:Subscriber)-[r:RECEIVED]->(n)
         WITH COUNT(r) AS total_sent,
              COUNT(CASE WHEN r.delivery_status = "bounced" THEN 1 END) AS bounces
         RETURN total_sent, bounces,
                round(100.0 * bounces / total_sent, 2) AS bounce_rate_pct
-        """
+        """,
+        {"cutoff": cutoff}
     )
 
 
 @router.get("/events/recent")
 async def recent_events(days: int = 7, limit: int = 50):
     """Get recent events."""
+    cutoff = get_cutoff_date(days)
 
     return await db.execute(
-        f"""
+        """
         MATCH (s:Subscriber)-[:LOGGED]->(e:Event)
-        WHERE e.occurred_at > datetime() - duration("P{days}D")
+        WHERE e.occurred_at > $cutoff
         RETURN e.type AS type, s.email AS email, e.occurred_at AS occurred_at, e.reason AS reason
         ORDER BY e.occurred_at DESC
         LIMIT $limit
         """,
-        {"limit": limit}
+        {"cutoff": cutoff, "limit": limit}
     )
