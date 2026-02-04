@@ -1,6 +1,12 @@
 -- ============================================================================
 -- SUBSCRIBER MANAGEMENT QUERIES
 -- ============================================================================
+-- NOTE: These are reference queries showing logical intent.
+-- In the actual Python implementation:
+--   - datetime() is replaced with a $now parameter (ISO timestamp from Python)
+--   - duration() arithmetic is computed in Python using timedelta
+-- NeuralGraphDB does not support Neo4j's datetime() or duration() functions.
+-- ============================================================================
 
 -- 1. Create pending subscriber (signup)
 -- Params: $email, $name, $token

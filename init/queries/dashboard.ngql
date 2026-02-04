@@ -1,6 +1,12 @@
 -- ============================================================================
 -- DASHBOARD & ANALYTICS
 -- ============================================================================
+-- NOTE: These are reference queries showing logical intent.
+-- In the actual Python implementation:
+--   - datetime() - duration() comparisons use a $cutoff parameter
+--     computed in Python: (datetime.utcnow() - timedelta(days=N)).isoformat() + "Z"
+-- NeuralGraphDB does not support Neo4j's datetime() or duration() functions.
+-- ============================================================================
 
 -- 1. Subscriber summary
 MATCH (s:Subscriber)

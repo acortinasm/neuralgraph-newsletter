@@ -57,14 +57,13 @@ CREATE (s:Subscriber {
     email: $email,
     name: $name,
     status: "pending",
-    subscribed_at: datetime(),
-    confirmation_token: $token,
-    token_expires_at: datetime() + duration("P7D")
+    subscribed_at: $now,
+    confirmation_token: $token
 })
 RETURN s.email, s.confirmation_token;
 ```
 
-**Parameters:** `$email`, `$name`, `$token`
+**Parameters:** `$email`, `$name`, `$token`, `$now` (ISO timestamp from Python)
 
 ### Confirm Subscription
 
@@ -80,12 +79,12 @@ RETURN s.email, s.name;
 -- Step 2: Update subscriber status
 MATCH (s:Subscriber) WHERE s.email = $email
 SET s.status = "active",
-    s.confirmed_at = datetime(),
+    s.confirmed_at = $now,
     s.confirmation_token = null
 -- Step 3: Welcome email sent via Resend API
 ```
 
-**Parameters:** `$token`
+**Parameters:** `$token`, `$now` (ISO timestamp from Python)
 
 ### Unsubscribe
 
@@ -94,10 +93,10 @@ Marks a subscriber as unsubscribed.
 ```ngql
 MATCH (s:Subscriber)
 WHERE s.email = $email
-SET s.status = "unsubscribed", s.unsubscribed_at = datetime();
+SET s.status = "unsubscribed", s.unsubscribed_at = $now;
 ```
 
-**Parameters:** `$email`
+**Parameters:** `$email`, `$now` (ISO timestamp from Python)
 
 ### Get Subscriber with Interests
 
@@ -141,13 +140,13 @@ CREATE (n:Newsletter {
     subject: $subject,
     preview_text: $preview_text,
     external_url: $external_url,
-    created_at: datetime(),
+    created_at: $now,
     sent_at: null
 })
 RETURN n;
 ```
 
-**Parameters:** `$slug`, `$subject`, `$preview_text`, `$external_url`
+**Parameters:** `$slug`, `$subject`, `$preview_text`, `$external_url`, `$now` (ISO timestamp from Python)
 
 ### Create or Update Link
 
@@ -159,14 +158,14 @@ ON CREATE SET
     l.title = $title,
     l.description = $description,
     l.domain = $domain,
-    l.created_at = datetime()
+    l.created_at = $now
 ON MATCH SET
     l.title = $title,
     l.description = $description
 RETURN l;
 ```
 
-**Parameters:** `$url`, `$title`, `$description`, `$domain`
+**Parameters:** `$url`, `$title`, `$description`, `$domain`, `$now` (ISO timestamp from Python)
 
 ### Associate Link with Topics
 
@@ -212,12 +211,12 @@ MATCH (n:Newsletter {slug: $newsletter_slug})
 MATCH (s:Subscriber)
 WHERE s.status = "active"
 MERGE (s)-[r:RECEIVED]->(n)
-ON CREATE SET r.sent_at = datetime(), r.delivery_status = "sent"
+ON CREATE SET r.sent_at = $now, r.delivery_status = "sent"
 WITH n
-SET n.sent_at = datetime();
+SET n.sent_at = $now;
 ```
 
-**Parameters:** `$newsletter_slug`
+**Parameters:** `$newsletter_slug`, `$now` (ISO timestamp from Python)
 
 ### Get Newsletter with Links and Topics
 
@@ -261,13 +260,12 @@ DETACH DELETE n;
 
 ```ngql
 MATCH (s:Subscriber {email: $email})-[r:RECEIVED]->(n:Newsletter {slug: $slug})
-SET r.opened_at = COALESCE(r.opened_at, datetime()),
-    r.open_count = COALESCE(r.open_count, 0) + 1,
-    r.last_opened = datetime()
+SET r.opened_at = COALESCE(r.opened_at, $now),
+    r.open_count = COALESCE(r.open_count, 0) + 1
 RETURN s.email, n.slug, r.open_count;
 ```
 
-**Parameters:** `$email`, `$slug`
+**Parameters:** `$email`, `$slug`, `$now` (ISO timestamp from Python)
 
 ### Record Link Click
 
@@ -275,12 +273,12 @@ RETURN s.email, n.slug, r.open_count;
 MATCH (s:Subscriber {email: $email})
 MATCH (l:Link {url: $url})
 MERGE (s)-[c:CLICKED]->(l)
-ON CREATE SET c.first_clicked = datetime(), c.click_count = 1
-ON MATCH SET c.click_count = c.click_count + 1, c.clicked_at = datetime()
+ON CREATE SET c.clicked_at = $now, c.click_count = 1
+ON MATCH SET c.click_count = c.click_count + 1
 RETURN s.email, l.url, c.click_count;
 ```
 
-**Parameters:** `$email`, `$url`
+**Parameters:** `$email`, `$url`, `$now` (ISO timestamp from Python)
 
 ### Record Bounce
 
@@ -294,25 +292,25 @@ CREATE (e:Event {
     type: "bounce",
     bounce_type: $bounce_type,
     reason: $reason,
-    occurred_at: datetime()
+    occurred_at: $now
 })
 CREATE (s)-[:LOGGED]->(e)
 RETURN s.email, s.status;
 ```
 
-**Parameters:** `$email`, `$bounce_type`, `$reason`
+**Parameters:** `$email`, `$bounce_type`, `$reason`, `$now` (ISO timestamp from Python)
 
 ### Record Complaint
 
 ```ngql
 MATCH (s:Subscriber {email: $email})
 SET s.status = "complained"
-CREATE (e:Event {type: "complaint", reason: $reason, occurred_at: datetime()})
+CREATE (e:Event {type: "complaint", reason: $reason, occurred_at: $now})
 CREATE (s)-[:LOGGED]->(e)
 RETURN s.email;
 ```
 
-**Parameters:** `$email`, `$reason`
+**Parameters:** `$email`, `$reason`, `$now` (ISO timestamp from Python)
 
 ---
 
@@ -326,12 +324,12 @@ Aggregates click behavior to infer topic interests.
 MATCH (s:Subscriber {email: $email})-[c:CLICKED]->(l:Link)-[:ABOUT]->(t:Topic)
 WITH s, t, SUM(c.click_count) AS total_clicks, MAX(c.clicked_at) AS last_click
 MERGE (s)-[i:INTERESTED_IN]->(t)
-SET i.score = total_clicks, i.last_updated = datetime()
+SET i.score = total_clicks, i.last_updated = $now
 RETURN t.name, i.score, last_click
 ORDER BY i.score DESC;
 ```
 
-**Parameters:** `$email`
+**Parameters:** `$email`, `$now` (ISO timestamp from Python)
 
 ### Batch Recalculate All Interests
 
@@ -340,9 +338,11 @@ MATCH (s:Subscriber)-[c:CLICKED]->(l:Link)-[:ABOUT]->(t:Topic)
 WHERE s.status = "active"
 WITH s, t, SUM(c.click_count) AS total_clicks
 MERGE (s)-[i:INTERESTED_IN]->(t)
-SET i.score = total_clicks, i.last_updated = datetime()
+SET i.score = total_clicks, i.last_updated = $now
 RETURN COUNT(DISTINCT s) AS subscribers_updated;
 ```
+
+**Parameters:** `$now` (ISO timestamp from Python)
 
 ### Get Subscribers Interested in Topic
 
@@ -384,12 +384,14 @@ Subscribers with no opens in the last 90 days.
 MATCH (s:Subscriber)
 WHERE s.status = "active"
 OPTIONAL MATCH (s)-[r:RECEIVED]->(n:Newsletter)
-WHERE r.opened_at IS NOT NULL AND r.opened_at > datetime() - duration("P90D")
+WHERE r.opened_at IS NOT NULL AND r.opened_at > $cutoff
 WITH s, COUNT(r) AS recent_opens
 WHERE recent_opens = 0
 RETURN s.email, s.name, s.confirmed_at
 ORDER BY s.confirmed_at DESC;
 ```
+
+**Parameters:** `$cutoff` (ISO timestamp from Python: `datetime.utcnow() - timedelta(days=90)`)
 
 ---
 

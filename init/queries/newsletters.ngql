@@ -1,6 +1,12 @@
 -- ============================================================================
 -- NEWSLETTER & CONTENT MANAGEMENT
 -- ============================================================================
+-- NOTE: These are reference queries showing logical intent.
+-- In the actual Python implementation, datetime() is replaced with
+-- a $now parameter containing a Python-computed ISO timestamp:
+--   now_iso() -> datetime.utcnow().isoformat() + "Z"
+-- NeuralGraphDB does not support Neo4j's datetime() function.
+-- ============================================================================
 
 -- 1. Create newsletter issue
 -- Params: $slug, $subject, $preview_text, $external_url

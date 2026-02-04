@@ -1,6 +1,12 @@
 -- ============================================================================
 -- INFERRED INTERESTS & PERSONALIZATION
 -- ============================================================================
+-- NOTE: These are reference queries showing logical intent.
+-- In the actual Python implementation:
+--   - datetime() is replaced with a $now parameter (ISO timestamp from Python)
+--   - duration() comparisons use a $cutoff parameter computed in Python
+-- NeuralGraphDB does not support Neo4j's datetime() or duration() functions.
+-- ============================================================================
 
 -- 1. Recalculate interests for one subscriber
 -- Params: $email
