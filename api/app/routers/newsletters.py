@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import HTMLResponse
+from datetime import datetime
 from app.database import db
 from app.models import NewsletterCreate, NewsletterUpdate, LinkCreate, MessageResponse
 from app.auth import require_admin
@@ -7,6 +8,11 @@ from app.markdown_utils import render_markdown, extract_excerpt
 from app.email import send_newsletter_email
 
 router = APIRouter(prefix="/newsletters", tags=["newsletters"])
+
+
+def now_iso():
+    """Return current UTC time as ISO string (NeuralGraphDB compatible)."""
+    return datetime.utcnow().isoformat() + "Z"
 
 
 @router.post("/", response_model=MessageResponse)
@@ -39,8 +45,8 @@ async def create_newsletter(newsletter: NewsletterCreate, _: dict = Depends(requ
             content_md: $content_md,
             content_html: $content_html,
             external_url: $external_url,
-            created_at: datetime(),
-            updated_at: datetime(),
+            created_at: $now,
+            updated_at: $now,
             sent_at: null
         })
         """,
@@ -50,7 +56,8 @@ async def create_newsletter(newsletter: NewsletterCreate, _: dict = Depends(requ
             "preview_text": preview_text,
             "content_md": newsletter.content_md,
             "content_html": content_html,
-            "external_url": newsletter.external_url
+            "external_url": newsletter.external_url,
+            "now": now_iso()
         }
     )
 
@@ -72,8 +79,8 @@ async def update_newsletter(slug: str, update: NewsletterUpdate, _: dict = Depen
         raise HTTPException(400, "Cannot update a sent newsletter")
 
     # Build dynamic update
-    updates = ["n.updated_at = datetime()"]
-    params = {"slug": slug}
+    updates = ["n.updated_at = $now"]
+    params = {"slug": slug, "now": now_iso()}
 
     if update.subject is not None:
         updates.append("n.subject = $subject")
@@ -118,14 +125,15 @@ async def add_link(slug: str, link: LinkCreate, _: dict = Depends(require_admin)
         """
         MERGE (l:Link {url: $url})
         ON CREATE SET l.title = $title, l.description = $description,
-                      l.domain = $domain, l.created_at = datetime()
+                      l.domain = $domain, l.created_at = $now
         ON MATCH SET l.title = $title, l.description = $description
         """,
         {
             "url": link.url,
             "title": link.title,
             "description": link.description,
-            "domain": link.domain
+            "domain": link.domain,
+            "now": now_iso()
         }
     )
 
@@ -203,11 +211,11 @@ async def send_newsletter(slug: str, _: dict = Depends(require_admin)):
         MATCH (s:Subscriber)
         WHERE s.status = "active"
         MERGE (s)-[r:RECEIVED]->(n)
-        ON CREATE SET r.sent_at = datetime(), r.delivery_status = "sent"
+        ON CREATE SET r.sent_at = $now, r.delivery_status = "sent"
         WITH n
-        SET n.sent_at = datetime()
+        SET n.sent_at = $now
         """,
-        {"slug": slug}
+        {"slug": slug, "now": now_iso()}
     )
 
     if failed_count > 0:
@@ -367,9 +375,9 @@ async def render_newsletter_content(slug: str, _: dict = Depends(require_admin))
     await db.execute(
         """
         MATCH (n:Newsletter {slug: $slug})
-        SET n.content_html = $content_html, n.updated_at = datetime()
+        SET n.content_html = $content_html, n.updated_at = $now
         """,
-        {"slug": slug, "content_html": content_html}
+        {"slug": slug, "content_html": content_html, "now": now_iso()}
     )
 
     return MessageResponse(message=f"Newsletter '{slug}' content re-rendered")
