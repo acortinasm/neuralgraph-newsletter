@@ -1,13 +1,15 @@
 """Authentication endpoints."""
 import secrets
 from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from typing import Optional
 
 from app.config import settings
 from app.auth import (
     create_access_token, get_current_user, generate_api_key, require_admin,
-    store_api_key, revoke_api_key, list_api_keys
+    store_api_key, revoke_api_key, list_api_keys,
+    COOKIE_NAME, COOKIE_MAX_AGE,
 )
 from app.rate_limit import check_rate_limit
 
@@ -48,17 +50,16 @@ async def rate_limit_login(request: Request):
     await check_rate_limit(request, max_requests=5, window=300, key_prefix="login")
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login")
 async def login(
     credentials: LoginRequest,
     _: None = Depends(rate_limit_login)
 ):
     """
-    Authenticate with username/password to get a JWT token.
+    Authenticate with username/password.
 
-    Default admin credentials must be configured via environment variables:
-    - ADMIN_USERNAME (default: admin)
-    - ADMIN_PASSWORD (required)
+    Sets an httpOnly cookie with the JWT token and returns a success response.
+    The token is also returned in the body for programmatic (non-browser) clients.
     """
     if not settings.admin_password:
         raise HTTPException(
@@ -78,7 +79,37 @@ async def login(
 
     token = create_access_token({"sub": credentials.username, "role": "admin"})
 
-    return TokenResponse(access_token=token)
+    response = JSONResponse(content={
+        "access_token": token,
+        "token_type": "bearer",
+        "expires_in": COOKIE_MAX_AGE,
+    })
+
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=token,
+        max_age=COOKIE_MAX_AGE,
+        httponly=True,
+        secure=not settings.debug,
+        samesite="lax",
+        path="/",
+    )
+
+    return response
+
+
+@router.post("/logout")
+async def logout():
+    """Clear the session cookie."""
+    response = JSONResponse(content={"success": True})
+    response.delete_cookie(
+        key=COOKIE_NAME,
+        path="/",
+        httponly=True,
+        secure=not settings.debug,
+        samesite="lax",
+    )
+    return response
 
 
 @router.get("/me")

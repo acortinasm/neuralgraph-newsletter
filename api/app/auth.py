@@ -4,7 +4,7 @@ import hashlib
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import jwt
 
@@ -16,6 +16,10 @@ bearer_scheme = HTTPBearer(auto_error=False)
 # JWT settings
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
+
+# Cookie settings
+COOKIE_NAME = "session_token"
+COOKIE_MAX_AGE = 60 * 60 * 24  # 24 hours in seconds
 
 
 class AuthError(HTTPException):
@@ -150,31 +154,38 @@ async def list_api_keys() -> list[dict]:
 
 
 async def get_current_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme)
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
 ) -> dict:
     """
     Dependency to get current authenticated user.
-    Supports both JWT tokens and API keys.
+    Supports JWT tokens, API keys (Bearer header), and httpOnly cookies.
     """
-    if credentials is None:
+    token: Optional[str] = None
+
+    # 1. Check Bearer header (API keys and programmatic JWT usage)
+    if credentials is not None:
+        token = credentials.credentials
+
+        # API key check (starts with 'nk_')
+        if token.startswith("nk_"):
+            db_key = await verify_api_key_from_db(token)
+            if db_key:
+                return {"type": "api_key", "sub": "admin", "key_name": db_key.get("name")}
+
+            if settings.admin_api_key and verify_api_key(token):
+                return {"type": "api_key", "sub": "admin"}
+
+            raise AuthError("Invalid API key")
+
+    # 2. Fall back to httpOnly cookie
+    if token is None:
+        token = request.cookies.get(COOKIE_NAME)
+
+    if token is None:
         raise AuthError("Authentication required")
 
-    token = credentials.credentials
-
-    # Check if it's an API key (starts with 'nk_')
-    if token.startswith("nk_"):
-        # First check database
-        db_key = await verify_api_key_from_db(token)
-        if db_key:
-            return {"type": "api_key", "sub": "admin", "key_name": db_key.get("name")}
-
-        # Fall back to env var (legacy support)
-        if settings.admin_api_key and verify_api_key(token):
-            return {"type": "api_key", "sub": "admin"}
-
-        raise AuthError("Invalid API key")
-
-    # Otherwise treat as JWT
+    # Decode JWT (from header or cookie)
     payload = decode_token(token)
     return {"type": "jwt", "sub": payload.get("sub"), "role": payload.get("role", "user")}
 
