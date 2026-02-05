@@ -5,16 +5,17 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import subscribers, newsletters, tracking, analytics, auth, contact
 from app.logging_config import setup_logging, get_logger
-from app.email import init_resend
-from app.database import db
 
-# Setup logging
+# Setup logging BEFORE importing routers so all loggers use StructuredLogger
 log_json = os.getenv("LOG_FORMAT", "json") == "json"
 log_level = os.getenv("LOG_LEVEL", "INFO")
 setup_logging(json_output=log_json, level=log_level)
 logger = get_logger(__name__)
+
+from app.routers import subscribers, newsletters, tracking, analytics, auth, contact
+from app.email import init_resend
+from app.database import db
 
 
 @asynccontextmanager

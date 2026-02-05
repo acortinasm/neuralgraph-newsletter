@@ -4,6 +4,9 @@ from datetime import datetime
 from jinja2 import Environment, FileSystemLoader
 
 from app.config import settings
+from app.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 # Set up Jinja2 templates
 TEMPLATE_DIR = Path(__file__).parent / "templates"
@@ -14,6 +17,9 @@ def init_resend():
     """Initialize Resend API client."""
     if settings.resend_api_key:
         resend.api_key = settings.resend_api_key
+        logger.info("Resend API initialized")
+    else:
+        logger.warning("RESEND_API_KEY not set - emails will NOT be sent")
 
 
 def render_template(template_name: str, **context) -> str:
@@ -36,8 +42,7 @@ def send_confirmation_email(to_email: str, name: str, token: str) -> dict:
     )
 
     if not settings.resend_api_key:
-        # Log instead of sending in development
-        print(f"[DEV] Confirmation email to {to_email}: {confirm_url}")
+        logger.warning("Skipping confirmation email (no API key)", to=to_email, confirm_url=confirm_url)
         return {"id": "dev-mode"}
 
     return resend.Emails.send({
@@ -59,7 +64,7 @@ def send_welcome_email(to_email: str, name: str) -> dict:
     )
 
     if not settings.resend_api_key:
-        print(f"[DEV] Welcome email to {to_email}")
+        logger.warning("Skipping welcome email (no API key)", to=to_email)
         return {"id": "dev-mode"}
 
     return resend.Emails.send({

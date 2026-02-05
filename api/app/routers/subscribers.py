@@ -11,7 +11,10 @@ from app.models import (
 )
 from app.rate_limit import check_rate_limit
 from app.auth import require_admin
+from app.logging_config import get_logger
 import secrets
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/subscribers", tags=["subscribers"])
 
@@ -58,9 +61,8 @@ async def subscribe(request: SubscribeRequest, _: None = Depends(rate_limit_subs
     
     try:
         send_confirmation_email(request.email, request.name, token)
-    except Exception:
-        # Log error but don't fail the request - subscriber is created
-        pass
+    except Exception as e:
+        logger.error("Failed to send confirmation email", email=request.email, error=str(e))
 
     return MessageResponse(
         message="Please check your email to confirm subscription.",
@@ -104,8 +106,8 @@ async def _confirm_token(token: str) -> MessageResponse:
     # Step 3: Send welcome email
     try:
         send_welcome_email(email, name)
-    except Exception:
-        pass  # Don't fail confirmation if welcome email fails
+    except Exception as e:
+        logger.error("Failed to send welcome email", email=email, error=str(e))
 
     return MessageResponse(message="Subscription confirmed!", success=True)
 

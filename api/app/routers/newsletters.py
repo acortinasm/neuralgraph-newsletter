@@ -1,5 +1,4 @@
 from fastapi import APIRouter, HTTPException, Depends
-from fastapi.responses import HTMLResponse
 from datetime import datetime
 from app.database import db
 from app.models import NewsletterCreate, NewsletterUpdate, LinkCreate, MessageResponse
@@ -15,13 +14,18 @@ def now_iso():
     return datetime.utcnow().isoformat() + "Z"
 
 
+def strip_prefix(row: dict) -> dict:
+    """Strip node variable prefix (e.g. 'n.slug' -> 'slug') from DB result keys."""
+    return {k.split(".", 1)[-1] if "." in k else k: v for k, v in row.items()}
+
+
 @router.post("/", response_model=MessageResponse)
 async def create_newsletter(newsletter: NewsletterCreate, _: dict = Depends(require_admin)):
     """Create a new newsletter draft. Requires admin authentication."""
 
     # Check if slug exists
     existing = await db.execute(
-        "MATCH (n:Newsletter {slug: $slug}) RETURN n.slug",
+        "MATCH (n:Newsletter) WHERE n.slug = $slug RETURN n.slug",
         {"slug": newsletter.slug}
     )
     if existing:
@@ -70,7 +74,7 @@ async def update_newsletter(slug: str, update: NewsletterUpdate, _: dict = Depen
 
     # Check newsletter exists and not sent
     existing = await db.execute(
-        "MATCH (n:Newsletter {slug: $slug}) RETURN n.sent_at",
+        "MATCH (n:Newsletter) WHERE n.slug = $slug RETURN n.sent_at",
         {"slug": slug}
     )
     if not existing:
@@ -107,7 +111,7 @@ async def update_newsletter(slug: str, update: NewsletterUpdate, _: dict = Depen
 
     await db.execute(
         f"""
-        MATCH (n:Newsletter {{slug: $slug}})
+        MATCH (n:Newsletter) WHERE n.slug = $slug
         SET {", ".join(updates)}
         """,
         params
@@ -141,7 +145,7 @@ async def add_link(slug: str, link: LinkCreate, _: dict = Depends(require_admin)
     if link.topic_slugs:
         await db.execute(
             """
-            MATCH (l:Link {url: $url})
+            MATCH (l:Link) WHERE l.url = $url
             MATCH (t:Topic) WHERE t.slug IN $topic_slugs
             MERGE (l)-[:ABOUT]->(t)
             """,
@@ -151,8 +155,8 @@ async def add_link(slug: str, link: LinkCreate, _: dict = Depends(require_admin)
     # Link to newsletter
     await db.execute(
         """
-        MATCH (n:Newsletter {slug: $slug})
-        MATCH (l:Link {url: $url})
+        MATCH (n:Newsletter) WHERE n.slug = $slug
+        MATCH (l:Link) WHERE l.url = $url
         MERGE (n)-[:LINKS_TO]->(l)
         """,
         {"slug": slug, "url": link.url}
@@ -167,7 +171,7 @@ async def send_newsletter(slug: str, _: dict = Depends(require_admin)):
 
     # Check newsletter exists and not sent
     newsletter = await db.execute(
-        "MATCH (n:Newsletter {slug: $slug}) RETURN n.subject, n.sent_at, n.content_html",
+        "MATCH (n:Newsletter) WHERE n.slug = $slug RETURN n.subject, n.sent_at, n.content_html",
         {"slug": slug}
     )
 
@@ -204,24 +208,34 @@ async def send_newsletter(slug: str, _: dict = Depends(require_admin)):
         except Exception:
             failed_count += 1
 
-    # Create delivery records and mark sent
+    # Mark newsletter as sent
+    now = now_iso()
     await db.execute(
         """
-        MATCH (n:Newsletter {slug: $slug})
-        MATCH (s:Subscriber)
-        WHERE s.status = "active"
-        MERGE (s)-[r:RECEIVED]->(n)
-        ON CREATE SET r.sent_at = $now, r.delivery_status = "sent"
-        WITH n
+        MATCH (n:Newsletter) WHERE n.slug = $slug
         SET n.sent_at = $now
         """,
-        {"slug": slug, "now": now_iso()}
+        {"slug": slug, "now": now}
     )
 
     if failed_count > 0:
         return MessageResponse(message=f"Newsletter sent to {sent_count} subscribers ({failed_count} failed)")
 
     return MessageResponse(message=f"Newsletter sent to {sent_count} subscribers")
+
+
+@router.get("/published")
+async def list_published_newsletters():
+    """List sent newsletters. Public endpoint for the knowledge page."""
+    rows = await db.execute(
+        """
+        MATCH (n:Newsletter)
+        WHERE n.sent_at <> null
+        RETURN n.slug, n.subject, n.preview_text, n.sent_at, n.external_url
+        ORDER BY n.sent_at DESC
+        """
+    )
+    return [strip_prefix(r) for r in rows]
 
 
 @router.get("/")
@@ -231,7 +245,7 @@ async def list_newsletters(sent_only: bool = False, _: dict = Depends(require_ad
     if sent_only:
         query = """
             MATCH (n:Newsletter)
-            WHERE n.sent_at IS NOT NULL
+            WHERE n.sent_at <> null
             RETURN n.slug, n.subject, n.preview_text, n.sent_at, n.external_url
             ORDER BY n.sent_at DESC
         """
@@ -242,7 +256,13 @@ async def list_newsletters(sent_only: bool = False, _: dict = Depends(require_ad
             ORDER BY n.created_at DESC
         """
 
-    return await db.execute(query)
+    rows = await db.execute(query)
+    result = []
+    for r in rows:
+        item = strip_prefix(r)
+        item["status"] = "sent" if item.get("sent_at") else "draft"
+        result.append(item)
+    return result
 
 
 @router.get("/{slug}")
@@ -251,14 +271,10 @@ async def get_newsletter(slug: str, _: dict = Depends(require_admin)):
 
     newsletter = await db.execute(
         """
-        MATCH (n:Newsletter {slug: $slug})
-        OPTIONAL MATCH (n)-[:LINKS_TO]->(l:Link)
-        OPTIONAL MATCH (n)-[:COVERS]->(t:Topic)
+        MATCH (n:Newsletter) WHERE n.slug = $slug
         RETURN n.slug, n.subject, n.preview_text,
                n.content_md, n.content_html,
-               n.created_at, n.updated_at, n.sent_at, n.external_url,
-               COLLECT(DISTINCT {url: l.url, title: l.title}) AS links,
-               COLLECT(DISTINCT t.name) AS topics
+               n.created_at, n.updated_at, n.sent_at, n.external_url
         """,
         {"slug": slug}
     )
@@ -266,16 +282,39 @@ async def get_newsletter(slug: str, _: dict = Depends(require_admin)):
     if not newsletter:
         raise HTTPException(404, "Newsletter not found")
 
-    return newsletter[0]
+    result = strip_prefix(newsletter[0])
+
+    # Fetch linked resources separately
+    links = await db.execute(
+        """
+        MATCH (n:Newsletter) WHERE n.slug = $slug
+        MATCH (n)-[:LINKS_TO]->(l:Link)
+        RETURN l.url, l.title
+        """,
+        {"slug": slug}
+    )
+    result["links"] = [{"url": r.get("l.url"), "title": r.get("l.title")} for r in links]
+
+    topics = await db.execute(
+        """
+        MATCH (n:Newsletter) WHERE n.slug = $slug
+        MATCH (n)-[:COVERS]->(t:Topic)
+        RETURN t.name
+        """,
+        {"slug": slug}
+    )
+    result["topics"] = [r.get("t.name") for r in topics]
+
+    return result
 
 
-@router.get("/{slug}/preview", response_class=HTMLResponse)
+@router.get("/{slug}/preview")
 async def preview_newsletter(slug: str, _: dict = Depends(require_admin)):
     """Preview newsletter as rendered HTML. Requires admin authentication."""
 
     newsletter = await db.execute(
         """
-        MATCH (n:Newsletter {slug: $slug})
+        MATCH (n:Newsletter) WHERE n.slug = $slug
         RETURN n.subject, n.content_html
         """,
         {"slug": slug}
@@ -348,7 +387,7 @@ async def preview_newsletter(slug: str, _: dict = Depends(require_admin)):
     </html>
     """
 
-    return HTMLResponse(content=html)
+    return {"html": html}
 
 
 @router.post("/{slug}/render", response_model=MessageResponse)
@@ -356,7 +395,7 @@ async def render_newsletter_content(slug: str, _: dict = Depends(require_admin))
     """Re-render markdown to HTML (useful after markdown changes). Requires admin authentication."""
 
     newsletter = await db.execute(
-        "MATCH (n:Newsletter {slug: $slug}) RETURN n.content_md, n.sent_at",
+        "MATCH (n:Newsletter) WHERE n.slug = $slug RETURN n.content_md, n.sent_at",
         {"slug": slug}
     )
 
@@ -374,7 +413,7 @@ async def render_newsletter_content(slug: str, _: dict = Depends(require_admin))
 
     await db.execute(
         """
-        MATCH (n:Newsletter {slug: $slug})
+        MATCH (n:Newsletter) WHERE n.slug = $slug
         SET n.content_html = $content_html, n.updated_at = $now
         """,
         {"slug": slug, "content_html": content_html, "now": now_iso()}
@@ -389,8 +428,7 @@ async def delete_newsletter(slug: str, _: dict = Depends(require_admin)):
 
     result = await db.execute(
         """
-        MATCH (n:Newsletter {slug: $slug})
-        WHERE n.sent_at IS NULL
+        MATCH (n:Newsletter) WHERE n.slug = $slug AND n.sent_at = null
         DETACH DELETE n
         RETURN COUNT(n) AS deleted
         """,
