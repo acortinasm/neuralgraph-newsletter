@@ -238,6 +238,21 @@ async def list_published_newsletters():
     return [strip_prefix(r) for r in rows]
 
 
+@router.get("/published/{slug}")
+async def get_published_newsletter(slug: str):
+    """Get a single sent newsletter by slug. Public endpoint."""
+    newsletter = await db.execute(
+        """
+        MATCH (n:Newsletter) WHERE n.slug = $slug AND n.sent_at <> null
+        RETURN n.slug, n.subject, n.preview_text, n.content_html, n.sent_at
+        """,
+        {"slug": slug}
+    )
+    if not newsletter:
+        raise HTTPException(404, "Newsletter not found")
+    return strip_prefix(newsletter[0])
+
+
 @router.get("/")
 async def list_newsletters(sent_only: bool = False, _: dict = Depends(require_admin)):
     """List all newsletters. Requires admin authentication."""

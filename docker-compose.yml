@@ -1,11 +1,36 @@
 services:
+  neuralgraphdb:
+    image: neuralgraph/neuralgraphdb:latest
+    container_name: neuralgraphdb
+    command: ["serve", "--host", "0.0.0.0", "--port", "3000"]
+    ports:
+      - "3000:3000"
+    environment:
+      - NGDB_PATH=/data/graph.ngdb
+      - NGDB_SAVE_INTERVAL=${NGDB_SAVE_INTERVAL:-60}
+      - NGDB_SAVE_THRESHOLD=${NGDB_SAVE_THRESHOLD:-10}
+      - NGDB_BACKUP_COUNT=${NGDB_BACKUP_COUNT:-3}
+      - NGDB_SHUTDOWN_TIMEOUT=${NGDB_SHUTDOWN_TIMEOUT:-30}
+    volumes:
+      - neuralgraph-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/3000'"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
   api:
     build: ./api
     container_name: newsletter-api
     ports:
       - "8000:8000"
+    depends_on:
+      neuralgraphdb:
+        condition: service_healthy
     environment:
-      - NEURALGRAPH_URL=${NEURALGRAPH_URL:-http://host.docker.internal:3000}
+      - NEURALGRAPH_URL=${NEURALGRAPH_URL:-http://neuralgraphdb:3000}
       - RESEND_API_KEY=${RESEND_API_KEY}
       - FROM_EMAIL=${FROM_EMAIL:-newsletter@example.com}
       - CONTACT_EMAIL=${CONTACT_EMAIL}
@@ -18,8 +43,6 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - RATE_LIMIT_REQUESTS=${RATE_LIMIT_REQUESTS:-10}
       - RATE_LIMIT_WINDOW=${RATE_LIMIT_WINDOW:-60}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health/live"]
@@ -27,3 +50,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+volumes:
+  neuralgraph-data:
