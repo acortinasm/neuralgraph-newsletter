@@ -6,7 +6,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 
 # Install neuralgraph driver from GitHub
-RUN pip install --no-cache-dir git+https://github.com/acortinasm/neuralgraph.git#subdirectory=drivers/python
+RUN pip install --no-cache-dir git+https://github.com/acortinasm/neuralgraph-python.git
 
 # Install dependencies
 RUN pip install --no-cache-dir fastapi "uvicorn[standard]" pydantic-settings resend python-dotenv "email-validator>=2.3.0" "markdown>=3.10.2"
