@@ -6,7 +6,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: acortinasm/newsletter-api
+  IMAGE_NAME: acortinasm/neuralgraph-newsletter
 
 jobs:
   build-and-deploy:
