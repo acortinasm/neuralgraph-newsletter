@@ -1,0 +1,26 @@
+[project]
+name = "newsletter"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "neuralgraph",
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic-settings",
+    "resend",
+    "python-dotenv",
+    "email-validator>=2.3.0",
+    "markdown>=3.10.2",
+]
+
+[tool.uv.sources]
+neuralgraph = { path = "../neuralgraph/drivers/python" }
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+]
